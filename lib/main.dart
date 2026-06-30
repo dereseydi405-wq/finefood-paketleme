@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -23,7 +25,7 @@ class FinefoodApp extends StatelessWidget {
           secondary: const Color(0xFF0B2D4D),
         ),
       ),
-      home: const HomeScreen(),
+      home: const SplashScreen(),
     );
   }
 }
@@ -99,12 +101,15 @@ const List<PackingItem> packingItems = [
       '7x7',
       '7×7',
       'poşet',
+      'poset',
       'koli',
       'palet',
       'robot',
       'skt',
       'son kullanma',
       '1 yıl',
+      'film',
+      'filim',
     ],
     details: {
       'Poşet yazıcı': 'Mcdonalds 7×7 poset nisan-2033',
@@ -159,6 +164,117 @@ const List<PackingItem> packingItems = [
   ),
 ];
 
+class AppColors {
+  static const Color navy = Color(0xFF0B2D4D);
+  static const Color green = Color(0xFF43A047);
+  static const Color lightBg = Color(0xFFF4F7F6);
+  static const Color border = Color(0xFFE3ECE8);
+}
+
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+
+    Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const HomeScreen(),
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.navy,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(34),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 170,
+                  height: 170,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(42),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: Image.asset(
+                      'assets/icon/app_icon.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                const Text(
+                  'Finefood',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 42,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Paketleme',
+                  style: TextStyle(
+                    color: AppColors.green,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Hızlı ürün bilgi arama',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.75),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 34),
+                const SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(
+                    color: AppColors.green,
+                    strokeWidth: 3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -167,9 +283,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const Color navy = Color(0xFF0B2D4D);
-  static const Color green = Color(0xFF43A047);
-
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
@@ -188,11 +301,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
 
+    _showSnack('${item.title} bilgileri kopyalandı');
+  }
+
+  void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${item.title} bilgileri kopyalandı'),
+        content: Text(message),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: navy,
+        backgroundColor: AppColors.navy,
       ),
     );
   }
@@ -205,10 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _Header(
-              navy: navy,
-              green: green,
-            ),
+            const _Header(),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
               child: TextField(
@@ -249,10 +363,10 @@ class _HomeScreenState extends State<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 18),
               child: Row(
                 children: [
-                  Text(
+                  const Text(
                     'Kayıtlar',
                     style: TextStyle(
-                      color: navy,
+                      color: AppColors.navy,
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                     ),
@@ -264,13 +378,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: green.withOpacity(0.12),
+                      color: AppColors.green.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       '${items.length} sonuç',
                       style: const TextStyle(
-                        color: green,
+                        color: AppColors.green,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -291,17 +405,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         return _PackingCard(
                           item: item,
-                          navy: navy,
-                          green: green,
                           onCopy: () => _copyItem(item),
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => DetailScreen(
-                                  item: item,
-                                  navy: navy,
-                                  green: green,
-                                ),
+                                builder: (_) => DetailScreen(item: item),
                               ),
                             );
                           },
@@ -317,13 +425,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _Header extends StatelessWidget {
-  final Color navy;
-  final Color green;
-
-  const _Header({
-    required this.navy,
-    required this.green,
-  });
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
@@ -332,10 +434,10 @@ class _Header extends StatelessWidget {
       margin: const EdgeInsets.all(18),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           colors: [
-            navy,
-            const Color(0xFF123F67),
+            AppColors.navy,
+            Color(0xFF123F67),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -343,7 +445,7 @@ class _Header extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: navy.withOpacity(0.22),
+            color: AppColors.navy.withOpacity(0.22),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -352,30 +454,19 @@ class _Header extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 68,
-            height: 68,
+            width: 76,
+            height: 76,
+            padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(22),
+              borderRadius: BorderRadius.circular(24),
             ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  Icons.inventory_2_rounded,
-                  color: navy,
-                  size: 38,
-                ),
-                Positioned(
-                  top: 9,
-                  right: 10,
-                  child: Icon(
-                    Icons.eco_rounded,
-                    color: green,
-                    size: 22,
-                  ),
-                ),
-              ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Image.asset(
+                'assets/icon/app_icon.png',
+                fit: BoxFit.contain,
+              ),
             ),
           ),
           const SizedBox(width: 14),
@@ -392,10 +483,10 @@ class _Header extends StatelessWidget {
                     height: 1,
                   ),
                 ),
-                Text(
+                const Text(
                   'Paketleme',
                   style: TextStyle(
-                    color: green,
+                    color: AppColors.green,
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                     height: 1.15,
@@ -421,15 +512,11 @@ class _Header extends StatelessWidget {
 
 class _PackingCard extends StatelessWidget {
   final PackingItem item;
-  final Color navy;
-  final Color green;
   final VoidCallback onTap;
   final VoidCallback onCopy;
 
   const _PackingCard({
     required this.item,
-    required this.navy,
-    required this.green,
     required this.onTap,
     required this.onCopy,
   });
@@ -449,7 +536,7 @@ class _PackingCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: const Color(0xFFE3ECE8),
+              color: AppColors.border,
             ),
           ),
           child: Column(
@@ -461,20 +548,20 @@ class _PackingCard extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: green.withOpacity(0.12),
+                      color: AppColors.green.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.local_shipping_rounded,
-                      color: green,
+                      color: AppColors.green,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       item.title,
-                      style: TextStyle(
-                        color: navy,
+                      style: const TextStyle(
+                        color: AppColors.navy,
                         fontSize: 20,
                         fontWeight: FontWeight.w900,
                       ),
@@ -482,7 +569,7 @@ class _PackingCard extends StatelessWidget {
                   ),
                   Icon(
                     Icons.chevron_right_rounded,
-                    color: navy.withOpacity(0.55),
+                    color: AppColors.navy.withOpacity(0.55),
                   ),
                 ],
               ),
@@ -495,8 +582,8 @@ class _PackingCard extends StatelessWidget {
                     children: [
                       Text(
                         '${entry.key}: ',
-                        style: TextStyle(
-                          color: navy,
+                        style: const TextStyle(
+                          color: AppColors.navy,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -504,7 +591,7 @@ class _PackingCard extends StatelessWidget {
                         child: Text(
                           entry.value,
                           style: TextStyle(
-                            color: navy.withOpacity(0.78),
+                            color: AppColors.navy.withOpacity(0.78),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -528,9 +615,9 @@ class _PackingCard extends StatelessWidget {
                     child: FilledButton.icon(
                       onPressed: onCopy,
                       icon: const Icon(Icons.copy_rounded),
-                      label: const Text('Kopyala'),
+                      label: const Text('Hepsini kopyala'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: green,
+                        backgroundColor: AppColors.green,
                         foregroundColor: Colors.white,
                       ),
                     ),
@@ -547,28 +634,71 @@ class _PackingCard extends StatelessWidget {
 
 class DetailScreen extends StatelessWidget {
   final PackingItem item;
-  final Color navy;
-  final Color green;
 
   const DetailScreen({
     super.key,
     required this.item,
-    required this.navy,
-    required this.green,
   });
 
-  Future<void> _copy(BuildContext context) async {
+  Future<void> _copyAll(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: item.copyText));
 
     if (!context.mounted) return;
 
+    _showSnack(context, '${item.title} bilgileri kopyalandı');
+  }
+
+  Future<void> _copyField(
+    BuildContext context,
+    String title,
+    String value,
+  ) async {
+    await Clipboard.setData(ClipboardData(text: value));
+
+    if (!context.mounted) return;
+
+    _showSnack(context, '$title kopyalandı');
+  }
+
+  void _showSnack(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${item.title} bilgileri kopyalandı'),
+        content: Text(message),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: navy,
+        backgroundColor: AppColors.navy,
       ),
     );
+  }
+
+  Color _fieldColor(String key) {
+    final normalized = _normalize(key);
+
+    if (normalized.contains('poset')) return const Color(0xFF2E7D32);
+    if (normalized.contains('koli yazici')) return const Color(0xFF1565C0);
+    if (normalized.contains('koli')) return const Color(0xFF6A1B9A);
+    if (normalized.contains('skt')) return const Color(0xFFEF6C00);
+    if (normalized.contains('robot')) return const Color(0xFF00838F);
+    if (normalized.contains('palet')) return const Color(0xFFC62828);
+    if (normalized.contains('kg')) return const Color(0xFF5D4037);
+
+    return AppColors.green;
+  }
+
+  IconData _fieldIcon(String key) {
+    final normalized = _normalize(key);
+
+    if (normalized.contains('poset')) return Icons.print_rounded;
+    if (normalized.contains('koli yazici')) return Icons.inventory_rounded;
+    if (normalized.contains('koli')) return Icons.archive_rounded;
+    if (normalized.contains('skt')) return Icons.event_available_rounded;
+    if (normalized.contains('robot')) return Icons.smart_toy_rounded;
+    if (normalized.contains('palet')) return Icons.view_in_ar_rounded;
+    if (normalized.contains('filim') || normalized.contains('film')) {
+      return Icons.layers_rounded;
+    }
+    if (normalized.contains('kg')) return Icons.monitor_weight_rounded;
+
+    return Icons.info_rounded;
   }
 
   @override
@@ -576,18 +706,18 @@ class DetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(item.title),
-        backgroundColor: navy,
+        backgroundColor: AppColors.navy,
         foregroundColor: Colors.white,
       ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: FilledButton.icon(
-            onPressed: () => _copy(context),
+            onPressed: () => _copyAll(context),
             icon: const Icon(Icons.copy_rounded),
             label: const Text('Tüm bilgileri kopyala'),
             style: FilledButton.styleFrom(
-              backgroundColor: green,
+              backgroundColor: AppColors.green,
               foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(54),
               textStyle: const TextStyle(
@@ -604,22 +734,25 @@ class DetailScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: navy,
+              color: AppColors.navy,
               borderRadius: BorderRadius.circular(24),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 58,
-                  height: 58,
+                  width: 62,
+                  height: 62,
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Icon(
-                    Icons.inventory_2_rounded,
-                    color: green,
-                    size: 34,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.asset(
+                      'assets/icon/app_icon.png',
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -651,39 +784,72 @@ class DetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           ...item.details.entries.map(
-            (entry) => Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: const Color(0xFFE3ECE8),
+            (entry) {
+              final color = _fieldColor(entry.key);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppColors.border,
+                  ),
                 ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.key,
-                    style: TextStyle(
-                      color: green,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        _fieldIcon(entry.key),
+                        color: color,
+                        size: 23,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    entry.value,
-                    style: TextStyle(
-                      color: navy,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            entry.key,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            entry.value,
+                            style: const TextStyle(
+                              color: AppColors.navy,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    IconButton(
+                      tooltip: 'Kopyala',
+                      onPressed: () {
+                        _copyField(context, entry.key, entry.value);
+                      },
+                      icon: const Icon(Icons.copy_rounded),
+                      color: AppColors.navy,
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
