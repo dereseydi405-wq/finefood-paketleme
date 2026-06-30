@@ -117,6 +117,46 @@ const List<PackingItem> packingItems = [
       'Skt': '1 Yıl',
     },
   ),
+  PackingItem(
+    id: 'lezita_pro_9x9',
+    title: '9×9 Lezita Pro',
+    category: 'Lezita',
+    keywords: [
+      'lezita',
+      'lezita pro',
+      '9x9',
+      '9×9',
+      'pro',
+      'lezita 9x9',
+      'lezita 9×9',
+      '9x9 lezita pro',
+      '9×9 lezita pro',
+      'poşet',
+      'poset',
+      'koli',
+      'palet',
+      'turpal',
+      'robot',
+      'skt',
+      'son kullanma',
+      '2 yıl',
+      '675 kg',
+      'tam palet',
+      'film',
+      'filim',
+    ],
+    details: {
+      'Poşet yazıcı': 'lezita 9×9 poset nisan-2023',
+      'Koli yazıcı': 'lezita pro 9×9 koli 5×2.5 Kg',
+      'Koli': '260.390.290 lezita',
+      'Palet': '80×120 (Turpal palet)',
+      'SKT': '2 Yıl',
+      'Filim': 'Kendine özgü Lezita filim',
+      'Robot sırası': '6 sıra',
+      'Tam palet kg': '675 kg',
+      'Koli içi poşet sayısı': '5 Adet',
+    },
+  ),
 ];
 
 class HomeScreen extends StatefulWidget {
@@ -179,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   });
                 },
                 decoration: InputDecoration(
-                  hintText: 'Ürün ara... Örn: Mc, Mcdonalds, 7x7',
+                  hintText: 'Ürün ara... Örn: Mc, Lezita, 9x9',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _query.isNotEmpty
                       ? IconButton(
