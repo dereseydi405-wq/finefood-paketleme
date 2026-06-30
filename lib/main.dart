@@ -102,6 +102,9 @@ const List<PackingItem> packingItems = [
       'koli',
       'palet',
       'robot',
+      'skt',
+      'son kullanma',
+      '1 yıl',
     ],
     details: {
       'Poşet yazıcı': 'Mcdonalds 7×7 poset nisan-2033',
@@ -111,6 +114,7 @@ const List<PackingItem> packingItems = [
       'Filim': 'Sarı şefaf',
       'Robot sırası': '6',
       'Koli içi poşet sayısı': '5',
+      'Skt': '1 Yıl',
     },
   ),
 ];
@@ -392,7 +396,7 @@ class _PackingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firstDetails = item.details.entries.take(3).toList();
+    final firstDetails = item.details.entries.take(4).toList();
 
     return Material(
       color: Colors.white,
