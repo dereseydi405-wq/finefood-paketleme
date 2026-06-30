@@ -32,6 +32,9 @@ jobs:
       - name: Paketleri indir
         run: flutter pub get
 
+      - name: Uygulama ikonunu oluştur
+        run: dart run flutter_launcher_icons
+
       - name: APK oluştur
         run: flutter build apk --release
 
