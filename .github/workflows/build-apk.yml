@@ -1,0 +1,47 @@
+name: Build Finefood Paketleme APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    name: Android APK Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Kodu indir
+        uses: actions/checkout@v4
+
+      - name: Java kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Flutter kur
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Android dosyalarını oluştur
+        run: flutter create . --platforms=android --org com.finefoodpaketleme
+
+      - name: Paketleri indir
+        run: flutter pub get
+
+      - name: APK oluştur
+        run: flutter build apk --release
+
+      - name: APK ismini ayarla
+        run: |
+          mkdir -p build-output
+          cp build/app/outputs/flutter-apk/app-release.apk build-output/Finefood-Paketleme.apk
+
+      - name: APK dosyasını yükle
+        uses: actions/upload-artifact@v4
+        with:
+          name: Finefood-Paketleme-APK
+          path: build-output/Finefood-Paketleme.apk
