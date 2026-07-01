@@ -1,0 +1,3 @@
+.signing/
+android/key.properties
+android/app/release-keystore.jks
