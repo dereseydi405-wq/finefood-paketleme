@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:simple_barcode_scanner/simple_barcode_scanner.dart';
@@ -4875,7 +4876,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
             },
+          )
+
+          _settingsTile(
+            context: context,
+            icon: Icons.restore_page_rounded,
+            title: 'Yedek dosyasından geri yükle',
+            subtitle: 'Paylaştığın .json yedek dosyasını seçip ürünleri geri yükle.',
+            onTap: () async {
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (dialogContext) {
+                  return AlertDialog(
+                    title: const Text('Yedekten geri yüklensin mi?'),
+                    content: const Text(
+                      'Bu işlem telefondaki mevcut ürün listesini yedek dosyasındaki ürünlerle değiştirir.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext, false),
+                        child: const Text('Vazgeç'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(dialogContext, true),
+                        child: const Text('Geri yükle'),
+                      ),
+                    ],
+                  );
+                },
+              );
+
+              if (confirmed != true) return;
+
+              try {
+                final count = await BackupRestoreHelper.restoreFromJsonFile();
+
+                if (!context.mounted) return;
+
+                if (count == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Dosya seçilmedi.')),
+                  );
+                  return;
+                }
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('$count ürün yedekten geri yüklendi. Ana sayfaya dönünce liste yenilenir.'),
+                  ),
+                );
+              } catch (e) {
+                if (!context.mounted) return;
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Geri yükleme başarısız: $e')),
+                );
+              }
+            },
           ),
+,
           _settingsTile(
             context: context,
             icon: Icons.copy_all_rounded,
@@ -7456,6 +7515,60 @@ class DataHealthScreen extends StatelessWidget {
   }
 }
 
+
+class BackupRestoreHelper {
+  static Future<int?> restoreFromJsonFile() async {
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      allowMultiple: false,
+    );
+
+    if (picked == null || picked.files.isEmpty) {
+      return null;
+    }
+
+    final path = picked.files.single.path;
+    if (path == null || path.trim().isEmpty) {
+      throw Exception('Dosya yolu alınamadı.');
+    }
+
+    final raw = await File(path).readAsString(encoding: utf8);
+    final decoded = jsonDecode(raw);
+
+    if (decoded is! Map) {
+      throw Exception('Yedek dosyası geçersiz.');
+    }
+
+    final type = decoded['type']?.toString();
+    final itemsRaw = decoded['items'];
+
+    if (type != null && type != 'finefood_backup') {
+      throw Exception('Bu dosya Finefood yedeği gibi görünmüyor.');
+    }
+
+    if (itemsRaw is! List) {
+      throw Exception('Yedek içinde ürün listesi bulunamadı.');
+    }
+
+    final restoredItems = <PackingItem>[];
+
+    for (final row in itemsRaw) {
+      if (row is Map) {
+        restoredItems.add(
+          PackingItem.fromJson(Map<String, dynamic>.from(row)),
+        );
+      }
+    }
+
+    if (restoredItems.isEmpty) {
+      throw Exception('Yedek dosyasında ürün yok.');
+    }
+
+    await StorageHelper.saveItems(restoredItems);
+    return restoredItems.length;
+  }
+}
 
 class BackupShareHelper {
   static Future<File> createBackupFile() async {
