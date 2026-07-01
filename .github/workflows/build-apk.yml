@@ -44,6 +44,19 @@ jobs:
       - name: Uygulama ikonunu oluştur
         run: dart run flutter_launcher_icons
 
+      - name: Android SDK 36 ayarla
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/g' android/app/build.gradle.kts
+            sed -i 's/compileSdk = [0-9]\+/compileSdk = 36/g' android/app/build.gradle.kts
+          fi
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/compileSdkVersion [0-9]\+/compileSdkVersion 36/g' android/app/build.gradle
+            sed -i 's/compileSdk [0-9]\+/compileSdk 36/g' android/app/build.gradle
+          fi
+
       - name: APK oluştur
         run: flutter build apk --release
 
