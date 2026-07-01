@@ -1701,6 +1701,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       onScan: _scanAndSearch,
                       onPrint: _printPdf,
                     ),
+                    if (!_loading && !widget.onlyFavorites)
+                      ProfessionalDashboard(
+                        items: _items,
+                        favoriteIds: _favoriteIds,
+                        recentIds: _recentIds,
+                        onMissingTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MissingInfoReportScreen(
+                                items: _items,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
                       child: TextField(
@@ -4030,6 +4045,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionTitle(context, 'Ürün yönetimi'),
           _settingsTile(
             context: context,
+            icon: Icons.warning_amber_rounded,
+            title: 'Eksik bilgi raporu',
+            subtitle: 'Palet, SKT, robot sırası gibi eksik alanları gösterir.',
+            onTap: () async {
+              final items = await StorageHelper.readItems();
+              if (!context.mounted) return;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MissingInfoReportScreen(items: items),
+                ),
+              );
+            },
+          ),
+          _settingsTile(
+            context: context,
             icon: Icons.playlist_add_rounded,
             title: 'Toplu ürün ekle',
             subtitle: 'Başlık = ... formatındaki metni ürüne çevirir.',
@@ -4593,6 +4623,278 @@ class ProductQrScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+List<String> missingFieldsForItem(PackingItem item) {
+  const requiredKeys = [
+    'Poşet yazıcı',
+    'Koli yazıcı',
+    'Koli',
+    'Palet',
+    'SKT',
+    'Robot sırası',
+    'Koli içi poşet sayısı',
+  ];
+
+  final missing = <String>[];
+
+  for (final key in requiredKeys) {
+    final value = item.detailByKey(key);
+    if (value == null || value.trim().isEmpty) {
+      missing.add(key);
+    }
+  }
+
+  return missing;
+}
+
+class ProfessionalDashboard extends StatelessWidget {
+  final List<PackingItem> items;
+  final Set<String> favoriteIds;
+  final List<String> recentIds;
+  final VoidCallback onMissingTap;
+
+  const ProfessionalDashboard({
+    super.key,
+    required this.items,
+    required this.favoriteIds,
+    required this.recentIds,
+    required this.onMissingTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final favoriteCount = items.where((e) => favoriteIds.contains(e.id)).length;
+    final missingCount =
+        items.where((item) => missingFieldsForItem(item).isNotEmpty).length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _DashboardMiniCard(
+                  title: 'Toplam',
+                  value: items.length.toString(),
+                  icon: Icons.inventory_2_rounded,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DashboardMiniCard(
+                  title: 'Favori',
+                  value: favoriteCount.toString(),
+                  icon: Icons.star_rounded,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _DashboardMiniCard(
+                  title: 'Eksik',
+                  value: missingCount.toString(),
+                  icon: Icons.warning_amber_rounded,
+                ),
+              ),
+            ],
+          ),
+          if (missingCount > 0) ...[
+            const SizedBox(height: 10),
+            Material(
+              color: AppColors.green.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                onTap: onMissingTap,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.fact_check_rounded,
+                        color: AppColors.green,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '$missingCount üründe eksik bilgi var. Raporu aç.',
+                          style: TextStyle(
+                            color: AppUi.text(context),
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppUi.muted(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardMiniCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _DashboardMiniCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppUi.card(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppUi.border(context)),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: AppColors.green),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: AppUi.text(context),
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            title,
+            style: TextStyle(
+              color: AppUi.muted(context),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class MissingInfoReportScreen extends StatelessWidget {
+  final List<PackingItem> items;
+
+  const MissingInfoReportScreen({
+    super.key,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final missingItems = items
+        .map((item) => MapEntry(item, missingFieldsForItem(item)))
+        .where((entry) => entry.value.isNotEmpty)
+        .toList();
+
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: const Text('Eksik Bilgi Raporu'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: missingItems.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.verified_rounded,
+                      color: AppColors.green,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Eksik bilgi yok',
+                      style: TextStyle(
+                        color: AppUi.text(context),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Tüm önemli alanlar dolu görünüyor kank.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppUi.muted(context)),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(18),
+              itemCount: missingItems.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final entry = missingItems[index];
+                final item = entry.key;
+                final missing = entry.value;
+
+                return Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppUi.card(context),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppUi.border(context)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.title,
+                              style: TextStyle(
+                                color: AppUi.text(context),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Eksik: ${missing.join(', ')}',
+                              style: TextStyle(
+                                color: AppUi.muted(context),
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
     );
   }
 }
