@@ -9,6 +9,7 @@ import 'package:simple_barcode_scanner/simple_barcode_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:barcode/barcode.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -817,6 +818,71 @@ class BulkParser {
 }
 
 class PdfHelper {
+
+  static Future<void> printQrLabel(PackingItem item) async {
+    final doc = pw.Document();
+
+    final qrData = (item.code != null && item.code!.trim().isNotEmpty)
+        ? item.code!.trim()
+        : item.id;
+
+    final poset = item.detailByKey('Poşet yazıcı');
+    final koliYazici = item.detailByKey('Koli yazıcı');
+
+    doc.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.Container(
+            padding: const pw.EdgeInsets.all(18),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(width: 2),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  'Finefood Paketleme',
+                  style: pw.TextStyle(
+                    fontSize: 14,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 12),
+                pw.Text(
+                  item.title,
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 6),
+                pw.Text('Kategori: ${item.category}'),
+                pw.Text('Kod: $qrData'),
+                pw.SizedBox(height: 18),
+                pw.BarcodeWidget(
+                  barcode: Barcode.qrCode(),
+                  data: qrData,
+                  width: 180,
+                  height: 180,
+                ),
+                pw.SizedBox(height: 18),
+                if (poset != null && poset.trim().isNotEmpty)
+                  pw.Text('Poşet yazıcı: $poset'),
+                if (koliYazici != null && koliYazici.trim().isNotEmpty)
+                  pw.Text('Koli yazıcı: $koliYazici'),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      name: '${item.title}-QR-Etiket.pdf',
+      onLayout: (_) async => doc.save(),
+    );
+  }
+
   static Future<void> printAllProducts(List<PackingItem> items) async {
     final doc = pw.Document();
 
@@ -4708,6 +4774,19 @@ class ProductQrScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: () async {
+              await PdfHelper.printQrLabel(item);
+            },
+            icon: const Icon(Icons.picture_as_pdf_rounded),
+            label: const Text('QR etiket PDF al'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.navy,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(54),
+            ),
+          ),
+          const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: qrData));
