@@ -29,6 +29,9 @@ const String historyStorageKey = 'change_history_v1';
 const String filterAll = 'Tümü';
 const String filterFavorites = 'Favoriler';
 const String filterRecent = 'Son Bakılanlar';
+const String filterMine = 'Benim Eklediklerim';
+const String filterReady = 'Hazır Ürünler';
+const String filterMissing = 'Eksik Bilgili';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1420,47 +1423,87 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _searchHistory = [];
 
   List<String> get categories {
-    final set = <String>{
-      filterAll,
-      filterFavorites,
-      filterRecent,
-    };
+  final categorySet = _items
+      .map((item) => item.category.trim())
+      .where((category) => category.isNotEmpty)
+      .toSet()
+      .toList()
+    ..sort();
 
-    for (final item in _items) {
-      if (item.category.trim().isNotEmpty) {
-        set.add(item.category.trim());
-      }
+  final filters = widget.onlyFavorites
+      ? <String>[
+          filterFavorites,
+          ...categorySet,
+        ]
+      : <String>[
+          filterAll,
+          filterMine,
+          filterReady,
+          filterMissing,
+          filterFavorites,
+          filterRecent,
+          ...categorySet,
+        ];
+
+  final clean = <String>[];
+
+  for (final filter in filters) {
+    if (!clean.contains(filter)) {
+      clean.add(filter);
     }
-
-    return set.toList();
   }
+
+  return clean;
+}
 
   List<PackingItem> get filteredItems {
-    if (_selectedCategory == filterFavorites) {
-      return _items
-          .where(
-            (item) => _favoriteIds.contains(item.id) && item.matches(_query),
-          )
-          .toList();
+  final query = _query.trim();
+
+  final result = _items.where((item) {
+    bool filterMatch = true;
+
+    if (widget.onlyFavorites) {
+      filterMatch = _favoriteIds.contains(item.id);
+    } else if (_selectedCategory == filterAll) {
+      filterMatch = true;
+    } else if (_selectedCategory == filterMine) {
+      filterMatch = isUserCreatedItem(item);
+    } else if (_selectedCategory == filterReady) {
+      filterMatch = !isUserCreatedItem(item);
+    } else if (_selectedCategory == filterMissing) {
+      filterMatch = missingFieldsForItem(item).isNotEmpty;
+    } else if (_selectedCategory == filterFavorites) {
+      filterMatch = _favoriteIds.contains(item.id);
+    } else if (_selectedCategory == filterRecent) {
+      filterMatch = _recentIds.contains(item.id);
+    } else {
+      filterMatch = item.category == _selectedCategory;
     }
 
-    if (_selectedCategory == filterRecent) {
-      final map = {for (final item in _items) item.id: item};
+    final queryMatch = query.isEmpty || item.matches(query);
 
-      return _recentIds
-          .map((id) => map[id])
-          .whereType<PackingItem>()
-          .where((item) => item.matches(_query))
-          .toList();
-    }
+    return filterMatch && queryMatch;
+  }).toList();
 
-    return _items.where((item) {
-      final categoryOk =
-          _selectedCategory == filterAll || item.category == _selectedCategory;
+  if (_selectedCategory == filterRecent) {
+    result.sort((a, b) {
+      final ai = _recentIds.indexOf(a.id);
+      final bi = _recentIds.indexOf(b.id);
 
-      return categoryOk && item.matches(_query);
-    }).toList();
+      if (ai == -1 && bi == -1) return 0;
+      if (ai == -1) return 1;
+      if (bi == -1) return -1;
+
+      return ai.compareTo(bi);
+    });
   }
+
+  if (_selectedCategory == filterMine) {
+    result.sort((a, b) => b.id.compareTo(a.id));
+  }
+
+  return result;
+}
 
   List<PackingItem> _sortedItems(List<PackingItem> source, SortMode mode) {
     final result = List<PackingItem>.from(source);
@@ -5781,6 +5824,18 @@ class ProductQrScreen extends StatelessWidget {
   }
 }
 
+
+
+bool isUserCreatedItem(PackingItem item) {
+  final id = item.id.toLowerCase();
+  final category = _normalize(item.category);
+
+  return id.startsWith('custom_') ||
+      id.startsWith('user_') ||
+      id.startsWith('added_') ||
+      category == _normalize('Eklenen Ürünler') ||
+      category == _normalize('Benim Eklediklerim');
+}
 
 List<String> missingFieldsForItem(PackingItem item) {
   const requiredKeys = [
