@@ -1933,11 +1933,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? null
                   : FloatingActionButton(
                       onPressed: _openAddProduct,
+                      mini: true,
                       backgroundColor: AppColors.green,
                       foregroundColor: Colors.white,
+                      shape: const CircleBorder(),
                       child: const Icon(
                         Icons.add_rounded,
-                        size: 34,
+                        size: 26,
                       ),
                     ),
               body: SafeArea(
@@ -2009,10 +2011,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           fillColor: AppUi.input(context),
                           contentPadding: EdgeInsets.symmetric(
                             horizontal: 16,
-                            vertical: compactList ? 12 : 16,
+                            vertical: compactList ? 10 : 13,
                           ),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
+                            borderRadius: BorderRadius.circular(22),
                             borderSide: BorderSide.none,
                           ),
                         ),
@@ -2048,7 +2050,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 8),
                     if (!_loading && !widget.onlyFavorites)
                       SizedBox(
-                        height: 46,
+                        height: 38,
                         child: ListView.separated(
                           padding: const EdgeInsets.symmetric(horizontal: 18),
                           scrollDirection: Axis.horizontal,
@@ -2068,6 +2070,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                             return ChoiceChip(
                               selected: selected,
+                              visualDensity: VisualDensity.compact,
                               avatar: icon == null
                                   ? null
                                   : Icon(
@@ -2200,103 +2203,103 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: AppSettings.compactListNotifier,
-      builder: (context, compact, _) {
-        return Container(
-          width: double.infinity,
-          margin: EdgeInsets.fromLTRB(18, 14, 18, 14),
-          padding: EdgeInsets.all(compact ? 13 : 16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [
-                AppColors.navy,
-                Color(0xFF123F67),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(
-                  AppUi.isDark(context) ? 0.35 : 0.18,
-                ),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.navy, Color(0xFF123F67)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(AppUi.isDark(context) ? 0.30 : 0.12),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: compact ? 58 : 68,
-                height: compact ? 58 : 68,
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Image.asset(
-                    'assets/icon/app_icon.png',
-                    fit: BoxFit.contain,
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: Image.asset('assets/icon/app_icon.png', fit: BoxFit.contain),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    height: 1.05,
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: compact ? 23 : 25,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                    ),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        color: AppColors.green,
-                        fontSize: compact ? 18 : 20,
-                        fontWeight: FontWeight.w800,
-                        height: 1.15,
-                      ),
-                    ),
-                    if (!compact) const SizedBox(height: 7),
-                    if (!compact)
-                      const Text(
-                        'Hızlı ürün bilgi arama',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                  ],
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.green,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
+                  ),
                 ),
-              ),
-              IconButton(
-                onPressed: onScan,
-                icon: const Icon(Icons.qr_code_scanner_rounded),
-                color: Colors.white,
-                tooltip: 'Kod okut',
-              ),
-              IconButton(
-                onPressed: onPrint,
-                icon: const Icon(Icons.picture_as_pdf_rounded),
-                color: Colors.white,
-                tooltip: 'PDF',
-              ),
-            ],
+              ],
+            ),
           ),
-        );
-      },
+          _HeaderIconButton(icon: Icons.qr_code_scanner_rounded, onTap: onScan),
+          const SizedBox(width: 6),
+          _HeaderIconButton(icon: Icons.picture_as_pdf_rounded, onTap: onPrint),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _HeaderIconButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withOpacity(0.10),
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: SizedBox(
+          width: 38,
+          height: 38,
+          child: Icon(icon, color: Colors.white, size: 21),
+        ),
+      ),
     );
   }
 }
@@ -5476,12 +5479,12 @@ class ProfessionalDashboard extends StatelessWidget {
         items.where((item) => missingFieldsForItem(item).isNotEmpty).length;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: AppUi.card(context),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: AppUi.border(context)),
         ),
         child: Row(
@@ -5505,7 +5508,7 @@ class ProfessionalDashboard extends StatelessWidget {
             Expanded(
               child: InkWell(
                 onTap: missingCount > 0 ? onMissingTap : null,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 child: _DashboardCompactItem(
                   title: 'Eksik',
                   value: missingCount.toString(),
@@ -5557,30 +5560,27 @@ class _DashboardCompactItem extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(
-          icon,
-          color: AppColors.green,
-          size: 25,
-        ),
-        const SizedBox(width: 9),
+        Icon(icon, color: AppColors.green, size: 20),
+        const SizedBox(width: 7),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               value,
               style: TextStyle(
                 color: AppUi.text(context),
-                fontSize: 20,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
                 height: 1,
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               title,
               style: TextStyle(
                 color: AppUi.muted(context),
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w800,
               ),
             ),
