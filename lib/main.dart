@@ -15,6 +15,8 @@ import 'package:barcode/barcode.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:mobile_scanner/mobile_scanner.dart' hide Barcode;
+
 const String itemsStorageKey = 'packing_items_all_v3';
 const String oldItemsStorageKey = 'packing_items_all_v2';
 const String oldCustomStorageKey = 'custom_packing_items_v1';
@@ -34,8 +36,6 @@ const String filterRecent = 'Son Bakılanlar';
 const String filterMine = 'Benim Eklediklerim';
 const String filterReady = 'Hazır Ürünler';
 const String filterMissing = 'Eksik Bilgili';
-
-import 'package:mobile_scanner/mobile_scanner.dart';
 String? _finefoodPendingScannedCode;
 
 void main() async {
