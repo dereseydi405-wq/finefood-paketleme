@@ -2688,6 +2688,514 @@ class AddProductScreen extends StatefulWidget {
 }
 
 class _AddProductScreenState extends State<AddProductScreen> {
+  final _titleController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _codeController = TextEditingController();
+
+  final _posetController = TextEditingController();
+  final _koliYaziciController = TextEditingController();
+  final _koliController = TextEditingController();
+
+  final _paletController = TextEditingController();
+  final _sktController = TextEditingController();
+  final _robotController = TextEditingController();
+  final _filimController = TextEditingController();
+  final _koliIciPosetController = TextEditingController();
+  final _tamPaletKgController = TextEditingController();
+
+  int _step = 0;
+  bool _saving = false;
+  String? _imagePath;
+
+  bool get _isEdit => widget.existingItem != null;
+
+  @override
+  void initState() {
+    super.initState();
+
+    final item = widget.existingItem;
+
+    if (item == null) {
+      _categoryController.text = 'Eklenen Ürünler';
+      return;
+    }
+
+    _titleController.text = item.title;
+    _categoryController.text = item.category;
+    _codeController.text = item.code ?? '';
+    _imagePath = item.imagePath;
+
+    _posetController.text = item.detailByKey('Poşet yazıcı') ?? '';
+    _koliYaziciController.text = item.detailByKey('Koli yazıcı') ?? '';
+    _koliController.text = item.detailByKey('Koli') ?? '';
+    _paletController.text = item.detailByKey('Palet') ?? '';
+    _sktController.text = item.detailByKey('SKT') ?? item.detailByKey('Skt') ?? '';
+    _robotController.text = item.detailByKey('Robot sırası') ?? '';
+    _filimController.text = item.detailByKey('Filim') ?? item.detailByKey('Film') ?? '';
+    _koliIciPosetController.text = item.detailByKey('Koli içi poşet sayısı') ?? '';
+    _tamPaletKgController.text = item.detailByKey('Tam palet kg') ?? '';
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _categoryController.dispose();
+    _codeController.dispose();
+    _posetController.dispose();
+    _koliYaziciController.dispose();
+    _koliController.dispose();
+    _paletController.dispose();
+    _sktController.dispose();
+    _robotController.dispose();
+    _filimController.dispose();
+    _koliIciPosetController.dispose();
+    _tamPaletKgController.dispose();
+    super.dispose();
+  }
+
+  String _clean(String value) => value.trim();
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.navy,
+      ),
+    );
+  }
+
+  void _applyTemplate(ProductTemplate template) {
+    setState(() {
+      if (_titleController.text.trim().isEmpty) {
+        _titleController.text = template.titleHint;
+      }
+
+      _categoryController.text = template.category;
+
+      _posetController.text = template.details['Poşet yazıcı'] ?? '';
+      _koliYaziciController.text = template.details['Koli yazıcı'] ?? '';
+      _koliController.text = template.details['Koli'] ?? '';
+      _paletController.text = template.details['Palet'] ?? '';
+      _sktController.text = template.details['SKT'] ?? '';
+      _robotController.text = template.details['Robot sırası'] ?? '';
+      _filimController.text = template.details['Filim'] ?? '';
+      _koliIciPosetController.text = template.details['Koli içi poşet sayısı'] ?? '';
+      _tamPaletKgController.text = template.details['Tam palet kg'] ?? '';
+    });
+
+    _showSnack('${template.name} şablonu uygulandı.');
+  }
+
+  Map<String, String> _buildDetails() {
+    final details = <String, String>{};
+
+    void add(String key, TextEditingController controller) {
+      final value = _clean(controller.text);
+      if (value.isNotEmpty) details[key] = value;
+    }
+
+    add('Poşet yazıcı', _posetController);
+    add('Koli yazıcı', _koliYaziciController);
+    add('Koli', _koliController);
+    add('Palet', _paletController);
+    add('SKT', _sktController);
+    add('Robot sırası', _robotController);
+    add('Filim', _filimController);
+    add('Koli içi poşet sayısı', _koliIciPosetController);
+    add('Tam palet kg', _tamPaletKgController);
+
+    return details;
+  }
+
+  List<String> _keywords({
+    required String title,
+    required String category,
+    required String? code,
+    required Map<String, String> details,
+  }) {
+    final set = <String>{};
+
+    void addText(String? text) {
+      if (text == null) return;
+      final clean = text.trim();
+      if (clean.isEmpty) return;
+
+      set.add(clean);
+      set.add(_normalize(clean));
+
+      for (final part in clean.split(RegExp(r'[\s,;:/\\|]+'))) {
+        if (part.trim().isNotEmpty) {
+          set.add(part.trim());
+          set.add(_normalize(part.trim()));
+        }
+      }
+    }
+
+    addText(title);
+    addText(category);
+    addText(code);
+
+    for (final entry in details.entries) {
+      addText(entry.key);
+      addText(entry.value);
+    }
+
+    return set.toList();
+  }
+
+  bool _validateBasic() {
+    if (_titleController.text.trim().isEmpty) {
+      _showSnack('Ürün adı boş olamaz.');
+      setState(() => _step = 0);
+      return false;
+    }
+
+    if (_categoryController.text.trim().isEmpty) {
+      _showSnack('Kategori boş olamaz.');
+      setState(() => _step = 0);
+      return false;
+    }
+
+    return true;
+  }
+
+  PackingItem _buildItem() {
+    final title = _clean(_titleController.text);
+    final category = _clean(_categoryController.text);
+    final code = _clean(_codeController.text);
+    final details = _buildDetails();
+
+    return PackingItem(
+      id: widget.existingItem?.id ?? 'custom_${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      category: category,
+      code: code.isEmpty ? null : code,
+      imagePath: _imagePath,
+      keywords: _keywords(
+        title: title,
+        category: category,
+        code: code.isEmpty ? null : code,
+        details: details,
+      ),
+      details: details,
+    );
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (!_validateBasic()) return;
+
+    setState(() => _saving = true);
+
+    final item = _buildItem();
+
+    if (!mounted) return;
+    Navigator.of(context).pop(item);
+  }
+
+  void _next() {
+    if (_step == 0 && !_validateBasic()) return;
+
+    if (_step < 3) {
+      setState(() => _step++);
+    } else {
+      _save();
+    }
+  }
+
+  void _back() {
+    if (_step > 0) {
+      setState(() => _step--);
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  Widget _input({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? hint,
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        style: TextStyle(
+          color: AppUi.text(context),
+          fontWeight: FontWeight.w700,
+        ),
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon),
+          labelText: label,
+          hintText: hint,
+          filled: true,
+          fillColor: AppUi.card(context),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: BorderSide(color: AppUi.border(context)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: AppColors.green, width: 2),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _header() {
+    final titles = [
+      'Temel Bilgi',
+      'Yazıcı Bilgileri',
+      'Palet / SKT',
+      'Kod / Fotoğraf',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.navy,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _isEdit ? 'Ürünü Düzenle' : 'Yeni Ürün Ekle',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: List.generate(4, (index) {
+              final active = index <= _step;
+
+              return Expanded(
+                child: Container(
+                  margin: EdgeInsets.only(right: index == 3 ? 0 : 6),
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: active ? AppColors.green : Colors.white.withOpacity(0.18),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${_step + 1}/4  ${titles[_step]}',
+            style: const TextStyle(
+              color: AppColors.green,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepBasic() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ProductTemplateChips(onApplyTemplate: _applyTemplate),
+        const SizedBox(height: 14),
+        _input(
+          controller: _titleController,
+          label: 'Ürün adı',
+          hint: 'Örn: 9×9 Lezita Pro',
+          icon: Icons.inventory_2_rounded,
+        ),
+        _input(
+          controller: _categoryController,
+          label: 'Kategori',
+          hint: 'Örn: Lezita, Mcdonalds',
+          icon: Icons.category_rounded,
+        ),
+      ],
+    );
+  }
+
+  Widget _stepPrinter() {
+    return Column(
+      children: [
+        _input(
+          controller: _posetController,
+          label: 'Poşet yazıcı',
+          hint: 'Poşete basılacak yazı',
+          icon: Icons.edit_note_rounded,
+          maxLines: 2,
+        ),
+        _input(
+          controller: _koliYaziciController,
+          label: 'Koli yazıcı',
+          hint: 'Koliye basılacak yazı',
+          icon: Icons.inventory_rounded,
+          maxLines: 2,
+        ),
+        _input(
+          controller: _koliController,
+          label: 'Koli',
+          hint: 'Koli bilgisi',
+          icon: Icons.archive_rounded,
+        ),
+      ],
+    );
+  }
+
+  Widget _stepPallet() {
+    return Column(
+      children: [
+        _input(
+          controller: _paletController,
+          label: 'Palet',
+          hint: 'Örn: 80×120',
+          icon: Icons.view_in_ar_rounded,
+        ),
+        _input(
+          controller: _sktController,
+          label: 'SKT',
+          hint: 'Örn: 1 Yıl',
+          icon: Icons.event_available_rounded,
+        ),
+        _input(
+          controller: _robotController,
+          label: 'Robot sırası',
+          hint: 'Örn: 6',
+          icon: Icons.smart_toy_rounded,
+        ),
+        _input(
+          controller: _filimController,
+          label: 'Filim',
+          hint: 'Filim bilgisi',
+          icon: Icons.layers_rounded,
+        ),
+        _input(
+          controller: _koliIciPosetController,
+          label: 'Koli içi poşet sayısı',
+          hint: 'Örn: 5 Adet',
+          icon: Icons.local_mall_rounded,
+        ),
+        _input(
+          controller: _tamPaletKgController,
+          label: 'Tam palet kg',
+          hint: 'Örn: 675 kg',
+          icon: Icons.monitor_weight_rounded,
+        ),
+      ],
+    );
+  }
+
+  Widget _stepCode() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _input(
+          controller: _codeController,
+          label: 'Ürün kodu / barkod',
+          hint: 'Örn: LEZITA-9X9-PRO',
+          icon: Icons.qr_code_rounded,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppColors.green.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.photo_library_rounded, color: AppColors.green),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Ürün fotoğraflarını kaydettikten sonra ürün detayındaki Fotoğraf bölümünden ekleyebilirsin.',
+                  style: TextStyle(
+                    color: AppUi.text(context),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _currentStep() {
+    if (_step == 0) return _stepBasic();
+    if (_step == 1) return _stepPrinter();
+    if (_step == 2) return _stepPallet();
+    return _stepCode();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: Text(_isEdit ? 'Ürünü Düzenle' : 'Ürün Ekle'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          _header(),
+          const SizedBox(height: 16),
+          _currentStep(),
+          const SizedBox(height: 90),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
+          decoration: BoxDecoration(
+            color: AppUi.pageBg(context),
+            border: Border(top: BorderSide(color: AppUi.border(context))),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _back,
+                  icon: const Icon(Icons.chevron_left_rounded),
+                  label: Text(_step == 0 ? 'Vazgeç' : 'Geri'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _saving ? null : _next,
+                  icon: Icon(_step == 3 ? Icons.save_rounded : Icons.chevron_right_rounded),
+                  label: Text(_step == 3 ? 'Kaydet' : 'Devam'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddProductScreenState extends State<AddProductScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _titleController = TextEditingController();
