@@ -20,6 +20,7 @@ const String recentStorageKey = 'recent_item_ids_v1';
 const String searchHistoryStorageKey = 'search_history_v1';
 const String autoBackupStorageKey = 'auto_backup_v1';
 const String pinStorageKey = 'app_pin_v1';
+const String trashStorageKey = 'deleted_items_v1';
 
 const String filterAll = 'Tümü';
 const String filterFavorites = 'Favoriler';
@@ -1505,25 +1506,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _deleteItem(PackingItem item) async {
-    await StorageHelper.saveAutoBackup(_items);
+  await StorageHelper.saveAutoBackup(_items);
+  await TrashHelper.moveToTrash(item);
 
-    setState(() {
-      _items.removeWhere((e) => e.id == item.id);
-      _favoriteIds.remove(item.id);
-      _recentIds.remove(item.id);
+  setState(() {
+    _items.removeWhere((e) => e.id == item.id);
+    _favoriteIds.remove(item.id);
+    _recentIds.remove(item.id);
 
-      if (!categories.contains(_selectedCategory)) {
-        _selectedCategory = widget.onlyFavorites ? filterFavorites : filterAll;
-      }
-    });
+    if (!categories.contains(_selectedCategory)) {
+      _selectedCategory = widget.onlyFavorites ? filterFavorites : filterAll;
+    }
+  });
 
-    await _saveItems();
-    await _saveFavorites();
-    await _saveRecent();
+  await _saveItems();
+  await _saveFavorites();
+  await _saveRecent();
 
-    if (!mounted) return;
-    _showSnack('${item.title} silindi. Otomatik yedek alındı.');
-  }
+  if (!mounted) return;
+  _showSnack('${item.title} çöp kutusuna taşındı.');
+}
 
   Future<bool> _toggleFavorite(PackingItem item) async {
     final bool nowFavorite = !_favoriteIds.contains(item.id);
@@ -4072,6 +4074,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionTitle(context, 'Ürün yönetimi'),
           _settingsTile(
             context: context,
+            icon: Icons.delete_sweep_rounded,
+            title: 'Çöp kutusu',
+            subtitle: 'Silinen ürünleri geri yükle veya kalıcı sil.',
+            onTap: () async {
+              final changed = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) => const TrashScreen(),
+                ),
+              );
+
+              if (changed == true) {
+                widget.onChanged?.call();
+                setState(() {});
+              }
+            },
+          ),
+          _settingsTile(
+            context: context,
             icon: Icons.warning_amber_rounded,
             title: 'Eksik bilgi raporu',
             subtitle: 'Palet, SKT, robot sırası gibi eksik alanları gösterir.',
@@ -5042,6 +5062,193 @@ class ProductTemplateChips extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+class TrashHelper {
+  static Future<List<PackingItem>> readTrash() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(trashStorageKey);
+
+    if (raw == null || raw.trim().isEmpty) return [];
+
+    try {
+      return StorageHelper.parseItems(raw);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveTrash(List<PackingItem> items) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(trashStorageKey, StorageHelper.encodeItems(items));
+  }
+
+  static Future<void> moveToTrash(PackingItem item) async {
+    final trash = await readTrash();
+    trash.removeWhere((e) => e.id == item.id);
+    trash.insert(0, item);
+    await saveTrash(trash.take(100).toList());
+  }
+}
+
+class TrashScreen extends StatefulWidget {
+  const TrashScreen({super.key});
+
+  @override
+  State<TrashScreen> createState() => _TrashScreenState();
+}
+
+class _TrashScreenState extends State<TrashScreen> {
+  bool _loading = true;
+  List<PackingItem> _trash = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTrash();
+  }
+
+  Future<void> _loadTrash() async {
+    final trash = await TrashHelper.readTrash();
+
+    if (!mounted) return;
+
+    setState(() {
+      _trash = trash;
+      _loading = false;
+    });
+  }
+
+  Future<void> _restore(PackingItem item) async {
+    final items = await StorageHelper.readItems();
+    await StorageHelper.saveAutoBackup(items);
+
+    items.removeWhere((e) => e.id == item.id);
+    items.add(item);
+
+    _trash.removeWhere((e) => e.id == item.id);
+
+    await StorageHelper.saveItems(items);
+    await TrashHelper.saveTrash(_trash);
+
+    if (!mounted) return;
+
+    setState(() {});
+    Navigator.of(context).pop(true);
+  }
+
+  Future<void> _deleteForever(PackingItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Kalıcı silinsin mi?'),
+        content: Text('${item.title} tamamen silinecek.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Kalıcı sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    _trash.removeWhere((e) => e.id == item.id);
+    await TrashHelper.saveTrash(_trash);
+
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: const Text('Çöp Kutusu'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.green),
+            )
+          : _trash.isEmpty
+              ? const _EmptyState()
+              : ListView.separated(
+                  padding: const EdgeInsets.all(18),
+                  itemCount: _trash.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final item = _trash[index];
+
+                    return Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppUi.card(context),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppUi.border(context)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            style: TextStyle(
+                              color: AppUi.text(context),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.category,
+                            style: TextStyle(
+                              color: AppUi.muted(context),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: () => _restore(item),
+                                  icon: const Icon(Icons.restore_rounded),
+                                  label: const Text('Geri yükle'),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: AppColors.green,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _deleteForever(item),
+                                  icon: const Icon(Icons.delete_forever_rounded),
+                                  label: const Text('Kalıcı sil'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
     );
   }
 }
