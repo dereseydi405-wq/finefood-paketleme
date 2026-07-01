@@ -5503,6 +5503,17 @@ class _EmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(color: AppUi.muted(context)),
             ),
+                    const SizedBox(height: 18),
+                    if (_searchController.text.trim().isNotEmpty)
+                      FilledButton.icon(
+                        onPressed: () {
+                          _finefoodPendingScannedCode =
+                              _searchController.text.trim();
+                          _openAddProduct();
+                        },
+                        icon: const Icon(Icons.add_rounded),
+                        label: const Text('Bu kodla ürün ekle'),
+                      ),
           ],
         ),
       ),
