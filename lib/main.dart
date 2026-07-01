@@ -820,6 +820,94 @@ class BulkParser {
 
 class PdfHelper {
 
+  static Future<void> printAllQrLabels(List<PackingItem> items) async {
+    final doc = pw.Document();
+
+    doc.addPage(
+      pw.MultiPage(
+        build: (context) {
+          return [
+            pw.Text(
+              'Finefood Paketleme - Toplu QR Etiketleri',
+              style: pw.TextStyle(
+                fontSize: 22,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 18),
+            pw.Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: items.map((item) {
+                final qrData = (item.code != null && item.code!.trim().isNotEmpty)
+                    ? item.code!.trim()
+                    : item.id;
+
+                final poset = item.detailByKey('Poşet yazıcı');
+                final koliYazici = item.detailByKey('Koli yazıcı');
+
+                return pw.Container(
+                  width: 245,
+                  padding: const pw.EdgeInsets.all(10),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(width: 1),
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        item.title,
+                        maxLines: 2,
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Text(
+                        'Kod: $qrData',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                      pw.SizedBox(height: 8),
+                      pw.Center(
+                        child: pw.BarcodeWidget(
+                          barcode: Barcode.qrCode(),
+                          data: qrData,
+                          width: 95,
+                          height: 95,
+                        ),
+                      ),
+                      pw.SizedBox(height: 8),
+                      if (poset != null && poset.trim().isNotEmpty)
+                        pw.Text(
+                          'Poşet: $poset',
+                          maxLines: 2,
+                          style: const pw.TextStyle(fontSize: 8),
+                        ),
+                      if (koliYazici != null && koliYazici.trim().isNotEmpty)
+                        pw.Text(
+                          'Koli: $koliYazici',
+                          maxLines: 2,
+                          style: const pw.TextStyle(fontSize: 8),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      name: 'Finefood-Toplu-QR-Etiketleri.pdf',
+      onLayout: (_) async => doc.save(),
+    );
+  }
+
+
   static Future<void> printQrLabel(PackingItem item) async {
     final doc = pw.Document();
 
@@ -5014,6 +5102,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 14),
           _sectionTitle(context, 'Ürün yönetimi'),
+          _settingsTile(
+            context: context,
+            icon: Icons.qr_code_2_rounded,
+            title: 'Toplu QR etiket PDF',
+            subtitle: 'Tüm ürünler için QR etiketlerini tek PDF yap.',
+            onTap: () async {
+              final items = await StorageHelper.readItems();
+
+              if (!context.mounted) return;
+
+              if (items.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('PDF için ürün bulunamadı.'),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: AppColors.navy,
+                  ),
+                );
+                return;
+              }
+
+              await PdfHelper.printAllQrLabels(items);
+            },
+          ),
           _settingsTile(
             context: context,
             icon: Icons.manage_history_rounded,
