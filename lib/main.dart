@@ -36,6 +36,8 @@ const String filterReady = 'Hazır Ürünler';
 const String filterMissing = 'Eksik Bilgili';
 
 import 'package:mobile_scanner/mobile_scanner.dart';
+String? _finefoodPendingScannedCode;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppSettings.loadAll();
@@ -1998,6 +2000,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (addNew == true) {
+      _finefoodPendingScannedCode = cleaned;
       await Clipboard.setData(ClipboardData(text: cleaned));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -2823,6 +2826,15 @@ class AddProductScreen extends StatefulWidget {
 }
 
 class _AddProductScreenState extends State<AddProductScreen> {
+
+  void _applyPendingScannedCode() {
+    final code = _finefoodPendingScannedCode?.trim();
+    if (code == null || code.isEmpty) return;
+
+    _finefoodPendingScannedCode = null;
+    _codeController.text = code;
+  }
+
   final _titleController = TextEditingController();
   final _categoryController = TextEditingController();
   final _codeController = TextEditingController();
@@ -2847,6 +2859,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   void initState() {
     super.initState();
+    _applyPendingScannedCode();
 
     final item = widget.existingItem;
 
