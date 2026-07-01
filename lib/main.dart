@@ -2209,165 +2209,349 @@ class _PackingCard extends StatelessWidget {
     return File(path).existsSync();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final firstDetails = item.details.entries.take(compact ? 2 : 4).toList();
-    final poset = item.detailByKey('Poşet yazıcı');
-    final koliYazici = item.detailByKey('Koli yazıcı');
+  IconData _iconForKey(String key) {
+    final normalized = _normalize(key);
 
-    return Material(
-      color: AppUi.card(context),
-      borderRadius: BorderRadius.circular(22),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          padding: EdgeInsets.all(compact ? 12 : 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: AppUi.border(context),
+    if (normalized.contains('poset')) return Icons.print_rounded;
+    if (normalized.contains('koli yazici')) return Icons.inventory_rounded;
+    if (normalized.contains('koli')) return Icons.archive_rounded;
+    if (normalized.contains('palet')) return Icons.view_in_ar_rounded;
+    if (normalized.contains('skt')) return Icons.event_available_rounded;
+    if (normalized.contains('robot')) return Icons.smart_toy_rounded;
+    if (normalized.contains('kg')) return Icons.monitor_weight_rounded;
+
+    return Icons.info_rounded;
+  }
+
+  Widget _badge({
+    required BuildContext context,
+    required IconData icon,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: AppColors.green.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: AppColors.green.withOpacity(0.25),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 15,
+            color: AppColors.green,
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              text,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppUi.text(context),
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+    );
+  }
+
+  Widget _miniInfo({
+    required BuildContext context,
+    required String label,
+    required String value,
+  }) {
+    return Material(
+      color: AppUi.isDark(context)
+          ? Colors.white.withOpacity(0.05)
+          : const Color(0xFFF7FAF8),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: () => onQuickCopy(label, value),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppUi.border(context)),
+          ),
+          child: Row(
             children: [
-              if (hasImage && !compact) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Image.file(
-                    File(item.imagePath!),
-                    height: 150,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-              Row(
-                children: [
-                  Container(
-                    width: compact ? 42 : 48,
-                    height: compact ? 42 : 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.green.withOpacity(0.13),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      hasImage
-                          ? Icons.image_rounded
-                          : Icons.local_shipping_rounded,
-                      color: AppColors.green,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      item.title,
-                      style: TextStyle(
-                        color: AppUi.text(context),
-                        fontSize: compact ? 18 : 20,
+              Icon(
+                _iconForKey(label),
+                size: 19,
+                color: AppColors.green,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.green,
+                        fontSize: 11,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
-                  ),
-                  if (isFavorite)
-                    const Icon(
-                      Icons.star_rounded,
-                      color: Colors.amber,
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppUi.text(context),
+                        fontSize: compact ? 12 : 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppUi.muted(context),
-                  ),
-                ],
-              ),
-              if (item.code != null && item.code!.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Kod: ${item.code}',
-                  style: const TextStyle(
-                    color: AppColors.green,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  ],
                 ),
-              ],
-              SizedBox(height: compact ? 10 : 14),
-              ...firstDetails.map(
-                (entry) => Padding(
-                  padding: EdgeInsets.only(bottom: compact ? 4 : 7),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              Icon(
+                Icons.copy_rounded,
+                size: 16,
+                color: AppUi.muted(context),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final priorityKeys = [
+      'Poşet yazıcı',
+      'Koli yazıcı',
+      'Palet',
+      'SKT',
+      'Skt',
+      'Robot sırası',
+    ];
+
+    final priorityEntries = <MapEntry<String, String>>[];
+
+    for (final key in priorityKeys) {
+      final value = item.detailByKey(key);
+      if (value != null && value.trim().isNotEmpty) {
+        final realEntry = item.details.entries.firstWhere(
+          (entry) => _normalize(entry.key) == _normalize(key),
+          orElse: () => MapEntry(key, value),
+        );
+
+        if (!priorityEntries.any(
+          (entry) => _normalize(entry.key) == _normalize(realEntry.key),
+        )) {
+          priorityEntries.add(realEntry);
+        }
+      }
+    }
+
+    final fallbackEntries = item.details.entries
+        .where(
+          (entry) => !priorityEntries.any(
+            (p) => _normalize(p.key) == _normalize(entry.key),
+          ),
+        )
+        .take(2)
+        .toList();
+
+    final displayEntries = [
+      ...priorityEntries,
+      ...fallbackEntries,
+    ].take(compact ? 2 : 4).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppUi.card(context),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppUi.border(context)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(
+              AppUi.isDark(context) ? 0.24 : 0.07,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 9),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(26),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(26),
+          child: Padding(
+            padding: EdgeInsets.all(compact ? 12 : 15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasImage && !compact) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Stack(
+                      children: [
+                        Image.file(
+                          File(item.imagePath!),
+                          height: 155,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                        Positioned(
+                          right: 10,
+                          top: 10,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.45),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Icon(
+                              Icons.image_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: compact ? 48 : 54,
+                      height: compact ? 48 : 54,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            AppColors.green,
+                            Color(0xFF2E7D32),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Icon(
+                        hasImage
+                            ? Icons.photo_library_rounded
+                            : Icons.inventory_2_rounded,
+                        color: Colors.white,
+                        size: compact ? 24 : 28,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: AppUi.text(context),
+                              fontSize: compact ? 18 : 21,
+                              fontWeight: FontWeight.w900,
+                              height: 1.05,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 7,
+                            runSpacing: 7,
+                            children: [
+                              _badge(
+                                context: context,
+                                icon: Icons.category_rounded,
+                                text: item.category,
+                              ),
+                              if (item.code != null &&
+                                  item.code!.trim().isNotEmpty)
+                                _badge(
+                                  context: context,
+                                  icon: Icons.qr_code_rounded,
+                                  text: item.code!,
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Column(
+                      children: [
+                        if (isFavorite)
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Colors.amber,
+                            size: 28,
+                          ),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          color: AppUi.muted(context),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                SizedBox(height: compact ? 10 : 14),
+                if (displayEntries.isNotEmpty)
+                  Column(
+                    children: displayEntries.map((entry) {
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: compact ? 7 : 9),
+                        child: _miniInfo(
+                          context: context,
+                          label: entry.key,
+                          value: entry.value,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                if (!compact) ...[
+                  const SizedBox(height: 4),
+                  Row(
                     children: [
-                      Text(
-                        '${entry.key}: ',
-                        style: TextStyle(
-                          color: AppUi.text(context),
-                          fontWeight: FontWeight.w800,
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: onTap,
+                          icon: const Icon(Icons.visibility_rounded),
+                          label: const Text('Detay'),
                         ),
                       ),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: Text(
-                          entry.value,
-                          style: TextStyle(
-                            color: AppUi.muted(context),
-                            fontWeight: FontWeight.w500,
+                        child: FilledButton.icon(
+                          onPressed: onCopy,
+                          icon: const Icon(Icons.copy_rounded),
+                          label: const Text('Kopyala'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.green,
+                            foregroundColor: Colors.white,
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
-              ),
-              if (!compact && (poset != null || koliYazici != null))
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      if (poset != null)
-                        ActionChip(
-                          avatar: const Icon(Icons.print_rounded),
-                          label: const Text('Poşet kopyala'),
-                          onPressed: () => onQuickCopy('Poşet yazıcı', poset),
-                        ),
-                      if (koliYazici != null)
-                        ActionChip(
-                          avatar: const Icon(Icons.inventory_rounded),
-                          label: const Text('Koli yazıcı kopyala'),
-                          onPressed: () =>
-                              onQuickCopy('Koli yazıcı', koliYazici),
-                        ),
-                    ],
-                  ),
-                ),
-              if (!compact) const SizedBox(height: 8),
-              if (!compact)
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onTap,
-                        icon: const Icon(Icons.visibility_rounded),
-                        label: const Text('Detay'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: onCopy,
-                        icon: const Icon(Icons.copy_rounded),
-                        label: const Text('Hepsini kopyala'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.green,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
+                ],
+              ],
+            ),
           ),
         ),
       ),
