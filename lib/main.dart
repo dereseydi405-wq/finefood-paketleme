@@ -9,6 +9,7 @@ import 'package:simple_barcode_scanner/simple_barcode_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const String itemsStorageKey = 'packing_items_all_v3';
@@ -3127,6 +3128,17 @@ class _DetailScreenState extends State<DetailScreen> {
             tooltip: 'Favori',
           ),
           IconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ProductQrScreen(item: _item),
+                ),
+              );
+            },
+            icon: const Icon(Icons.qr_code_2_rounded),
+            tooltip: 'QR oluştur',
+          ),
+          IconButton(
             onPressed: _duplicateItem,
             icon: const Icon(Icons.copy_all_rounded),
             tooltip: 'Ürünü çoğalt',
@@ -4484,3 +4496,104 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
+
+
+class ProductQrScreen extends StatelessWidget {
+  final PackingItem item;
+
+  const ProductQrScreen({
+    super.key,
+    required this.item,
+  });
+
+  String get qrData {
+    final code = item.code?.trim();
+    if (code != null && code.isNotEmpty) return code;
+    return item.id;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: const Text('Ürün QR'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.navy,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              children: [
+                Text(
+                  item.title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Kod: $qrData',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.green,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppUi.border(context)),
+            ),
+            child: Center(
+              child: QrImageView(
+                data: qrData,
+                version: QrVersions.auto,
+                size: 260,
+                backgroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: qrData));
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('QR kod verisi kopyalandı.'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: AppColors.navy,
+                ),
+              );
+            },
+            icon: const Icon(Icons.copy_rounded),
+            label: const Text('QR verisini kopyala'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.green,
+              foregroundColor: Colors.white,
+              minimumSize: const Size.fromHeight(54),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
