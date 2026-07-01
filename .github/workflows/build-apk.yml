@@ -1,25 +1,17 @@
-name: Build Finefood Paketleme APK
+name: Android APK Build
 
 on:
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-apk:
-    name: Android APK Build
+  build:
     runs-on: ubuntu-latest
 
     steps:
       - name: Kodu indir
         uses: actions/checkout@v4
-
-      - name: Java kur
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
 
       - name: Flutter kur
         uses: subosito/flutter-action@v2
@@ -27,253 +19,55 @@ jobs:
           channel: stable
 
       - name: Android dosyalarını oluştur
-        run: flutter create . --platforms=android --org com.finefoodpaketleme
-
-      - name: Android izinlerini ve minSdk ayarla
-        run: |
-          if ! grep -q "android.permission.CAMERA" android/app/src/main/AndroidManifest.xml; then
-            sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA" />\n    <application|' android/app/src/main/AndroidManifest.xml
-          fi
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/g' android/app/build.gradle.kts
-          fi
+        run: flutter create . --platforms=android
 
       - name: Paketleri indir
         run: flutter pub get
 
-      - name: Uygulama ikonunu oluştur
-        run: dart run flutter_launcher_icons
-
       - name: Android SDK 36 ayarla
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          fi
-          if [ ! -x "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME" "$ANDROID_SDK_ROOT" -name sdkmanager -type f 2>/dev/null | head -n 1)"
-          fi
-          echo "SDKMANAGER=$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses || true
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 36/g' android/app/build.gradle.kts
-            sed -i 's/compileSdk = [0-9]\+/compileSdk = 36/g' android/app/build.gradle.kts
-          fi
-          if [ -f android/app/build.gradle ]; then
-            sed -i 's/compileSdkVersion [0-9]\+/compileSdkVersion 36/g' android/app/build.gradle
-            sed -i 's/compileSdk [0-9]\+/compileSdk 36/g' android/app/build.gradle
-          fi
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" || true
 
-      - name: Sabit APK imzasını ayarla
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Android compileSdk düzelt
         run: |
-          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "ANDROID_KEYSTORE_BASE64 secret eksik"
-            exit 1
-          fi
-
-          mkdir -p android/app
-          printf "%s" "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/release-keystore.jks
-
-          cat > android/key.properties <<EOF
-          storePassword=$ANDROID_KEYSTORE_PASSWORD
-          keyPassword=$ANDROID_KEY_PASSWORD
-          keyAlias=$ANDROID_KEY_ALIAS
-          storeFile=release-keystore.jks
-          EOF
-
-          python3 - <<'PYSIGN'
+          python3 - <<'PY'
           from pathlib import Path
           import re
 
-          def block_end(text, open_i):
-              depth = 0
-              for i in range(open_i, len(text)):
-                  if text[i] == "{":
-                      depth += 1
-                  elif text[i] == "}":
-                      depth -= 1
-                      if depth == 0:
-                          return i
-              return -1
-
-          def insert_after_named_block(text, pattern, block):
-              m = re.search(pattern, text, re.M)
-              if not m:
-                  raise SystemExit("Blok bulunamadı: " + pattern)
-              open_i = text.find("{", m.start())
-              close_i = block_end(text, open_i)
-              if close_i == -1:
-                  raise SystemExit("Blok kapanışı bulunamadı: " + pattern)
-              return text[:close_i + 1] + block + text[close_i + 1:]
-
-          def insert_inside_block_start(text, pattern, block):
-              m = re.search(pattern, text, re.M)
-              if not m:
-                  raise SystemExit("Blok bulunamadı: " + pattern)
-              open_i = text.find("{", m.start())
-              return text[:open_i + 1] + block + text[open_i + 1:]
-
-          kts = Path("android/app/build.gradle.kts")
-          groovy = Path("android/app/build.gradle")
-
-          if kts.exists():
-              text = kts.read_text(encoding="utf-8")
-
-              if "import java.util.Properties" not in text:
-                  text = "import java.util.Properties\nimport java.io.FileInputStream\n\n" + text
-
-              if "val keystoreProperties = Properties()" not in text:
-                  props = "\n\n" + "\n".join([
-                      'val keystoreProperties = Properties()',
-                      'val keystorePropertiesFile = rootProject.file("key.properties")',
-                      'if (keystorePropertiesFile.exists()) {',
-                      '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))',
-                      '}',
-                      ''
-                  ])
-                  text = insert_after_named_block(text, r"^plugins\s*\{", props)
-
-              if 'create("release")' not in text:
-                  signing = "\n" + "\n".join([
-                      '    signingConfigs {',
-                      '        create("release") {',
-                      '            keyAlias = keystoreProperties["keyAlias"] as String',
-                      '            keyPassword = keystoreProperties["keyPassword"] as String',
-                      '            storeFile = file(keystoreProperties["storeFile"] as String)',
-                      '            storePassword = keystoreProperties["storePassword"] as String',
-                      '        }',
-                      '    }',
-                      ''
-                  ])
-                  text = insert_inside_block_start(text, r"^android\s*\{", signing)
-
-              text = text.replace(
-                  'signingConfig = signingConfigs.getByName("debug")',
-                  'signingConfig = signingConfigs.getByName("release")'
-              )
-
-              if 'signingConfig = signingConfigs.getByName("release")' not in text:
-                  text = text.replace(
-                      "release {",
-                      'release {\n            signingConfig = signingConfigs.getByName("release")',
-                      1
-                  )
-
-              kts.write_text(text, encoding="utf-8")
-              print("Kotlin Gradle sabit imza ayarlandı.")
-
-          elif groovy.exists():
-              text = groovy.read_text(encoding="utf-8")
-
-              if "def keystoreProperties = new Properties()" not in text:
-                  text = "\n".join([
-                      "def keystoreProperties = new Properties()",
-                      "def keystorePropertiesFile = rootProject.file('key.properties')",
-                      "if (keystorePropertiesFile.exists()) {",
-                      "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))",
-                      "}",
-                      "",
-                  ]) + text
-
-              if "signingConfigs" not in text:
-                  signing = "\n" + "\n".join([
-                      "    signingConfigs {",
-                      "        release {",
-                      "            keyAlias keystoreProperties['keyAlias']",
-                      "            keyPassword keystoreProperties['keyPassword']",
-                      "            storeFile file(keystoreProperties['storeFile'])",
-                      "            storePassword keystoreProperties['storePassword']",
-                      "        }",
-                      "    }",
-                      "",
-                  ])
-                  text = insert_inside_block_start(text, r"^android\s*\{", signing)
-
-              text = text.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
-              groovy.write_text(text, encoding="utf-8")
-              print("Groovy Gradle sabit imza ayarlandı.")
-
-          else:
-              raise SystemExit("Gradle dosyası bulunamadı")
-          PYSIGN
-
-
-      - name: APK oluştur
-        run: |
-          python3 - <<'PYSDK'
-          from pathlib import Path
-          import re
-
-          files = [
-              Path("android/app/build.gradle.kts"),
-              Path("android/app/build.gradle"),
-          ]
-
-          files += list(Path(".").glob("**/build.gradle.kts"))
-          files += list(Path(".").glob("**/build.gradle"))
-
-          home = Path.home()
-          files += list(home.glob(".pub-cache/hosted/**/android/build.gradle.kts"))
-          files += list(home.glob(".pub-cache/hosted/**/android/build.gradle"))
-
-          seen = set()
-          files = [x for x in files if not (str(x) in seen or seen.add(str(x)))]
-
-          ok = False
+          files = [Path("android/app/build.gradle.kts")]
+          pub = Path.home() / ".pub-cache" / "hosted" / "pub.dev"
+          if pub.exists():
+              files += list(pub.glob("**/android/build.gradle"))
+              files += list(pub.glob("**/android/build.gradle.kts"))
 
           for p in files:
               if not p.exists():
                   continue
+              s = p.read_text(encoding="utf-8", errors="ignore")
+              old = s
+              s = re.sub(r"compileSdkVersion\s+\d+", "compileSdkVersion 36", s)
+              s = re.sub(r"compileSdk\s*=\s*\d+", "compileSdk = 36", s)
+              s = re.sub(r"compileSdk\s+\d+", "compileSdk 36", s)
+              s = re.sub(r"compileSdkVersion\s*=\s*\d+", "compileSdkVersion = 36", s)
+              s = re.sub(r"compileSdk\s*=\s*flutter\.compileSdkVersion", "compileSdk = 36", s)
+              if s != old:
+                  p.write_text(s, encoding="utf-8")
+                  print(f"{p}: compileSdk 36")
+          PY
 
-              text = p.read_text(encoding="utf-8")
+      - name: Uygulama ikonunu oluştur
+        run: dart run flutter_launcher_icons || true
 
-              text = re.sub(
-                  r"compileSdk\s*=\s*(flutter\.compileSdkVersion|\d+)",
-                  "compileSdk = 36",
-                  text,
-              )
-              text = re.sub(
-                  r"compileSdkVersion\s+(flutter\.compileSdkVersion|\d+)",
-                  "compileSdkVersion 36",
-                  text,
-              )
-              text = text.replace("compileSdk = 34", "compileSdk = 36")
-              text = text.replace("compileSdkVersion 34", "compileSdkVersion 36")
-              text = text.replace("compileSdk 34", "compileSdk 36")
-              text = text.replace("compileSdk 35", "compileSdk 36")
-              text = re.sub(
-                  r"compileSdk\\s+(flutter\\.compileSdkVersion|\\d+)",
-                  "compileSdk 36",
-                  text,
-              )
-
-              p.write_text(text, encoding="utf-8")
-
-              for line in text.splitlines():
-                  if "compileSdk" in line:
-                      print(f"{p}: {line}")
-                      if "36" in line:
-                          ok = True
-
-          if not ok:
-              raise SystemExit("compileSdk 36 uygulanamadı")
-          PYSDK
-
-          flutter build apk --release
+      - name: Debug APK oluştur
+        run: flutter build apk --debug
 
       - name: APK ismini ayarla
-        run: |
-          mkdir -p build-output
-          cp build/app/outputs/flutter-apk/app-release.apk build-output/Finefood-Paketleme.apk
+        run: cp build/app/outputs/flutter-apk/app-debug.apk Finefood-Paketleme.apk
 
       - name: APK dosyasını yükle
         uses: actions/upload-artifact@v4
         with:
           name: Finefood-Paketleme-APK
-          path: build-output/Finefood-Paketleme.apk
+          path: Finefood-Paketleme.apk
