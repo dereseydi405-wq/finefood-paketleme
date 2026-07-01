@@ -1834,6 +1834,21 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                         },
                       ),
+                    if (!_loading && !widget.onlyFavorites)
+                      HomeQuickActions(
+                        onScan: _scanAndSearch,
+                        onAdd: _openAddProduct,
+                        onPdf: _printPdf,
+                        onMissing: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => MissingInfoReportScreen(
+                                items: _items,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
                       child: TextField(
@@ -5877,6 +5892,157 @@ class _AccessModeScreenState extends State<AccessModeScreen> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+
+class HomeQuickActions extends StatelessWidget {
+  final VoidCallback onScan;
+  final VoidCallback onAdd;
+  final VoidCallback onPdf;
+  final VoidCallback onMissing;
+
+  const HomeQuickActions({
+    super.key,
+    required this.onScan,
+    required this.onAdd,
+    required this.onPdf,
+    required this.onMissing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppUi.card(context),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppUi.border(context)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(
+                AppUi.isDark(context) ? 0.22 : 0.06,
+              ),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.flash_on_rounded,
+                  color: AppColors.green,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Hızlı işlemler',
+                  style: TextStyle(
+                    color: AppUi.text(context),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _HomeActionButton(
+                    title: 'QR Okut',
+                    icon: Icons.qr_code_scanner_rounded,
+                    onTap: onScan,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _HomeActionButton(
+                    title: 'Ürün Ekle',
+                    icon: Icons.add_box_rounded,
+                    onTap: onAdd,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _HomeActionButton(
+                    title: 'PDF Al',
+                    icon: Icons.picture_as_pdf_rounded,
+                    onTap: onPdf,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _HomeActionButton(
+                    title: 'Eksik Raporu',
+                    icon: Icons.warning_amber_rounded,
+                    onTap: onMissing,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeActionButton extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _HomeActionButton({
+    required this.title,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.green.withOpacity(0.12),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 14,
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                color: AppColors.green,
+                size: 28,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: AppUi.text(context),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
