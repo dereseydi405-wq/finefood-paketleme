@@ -106,6 +106,13 @@ jobs:
               )
               text = text.replace("compileSdk = 34", "compileSdk = 36")
               text = text.replace("compileSdkVersion 34", "compileSdkVersion 36")
+              text = text.replace("compileSdk 34", "compileSdk 36")
+              text = text.replace("compileSdk 35", "compileSdk 36")
+              text = re.sub(
+                  r"compileSdk\\s+(flutter\\.compileSdkVersion|\\d+)",
+                  "compileSdk 36",
+                  text,
+              )
 
               p.write_text(text, encoding="utf-8")
 
