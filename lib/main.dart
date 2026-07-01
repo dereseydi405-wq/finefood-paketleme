@@ -1798,14 +1798,13 @@ class _HomeScreenState extends State<HomeScreen> {
               backgroundColor: AppUi.pageBg(context),
               floatingActionButton: widget.onlyFavorites
                   ? null
-                  : FloatingActionButton.extended(
+                  : FloatingActionButton(
                       onPressed: _openAddProduct,
                       backgroundColor: AppColors.green,
                       foregroundColor: Colors.white,
-                      icon: const Icon(Icons.add_rounded),
-                      label: const Text(
-                        'Ürün Ekle',
-                        style: TextStyle(fontWeight: FontWeight.w800),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        size: 34,
                       ),
                     ),
               body: SafeArea(
@@ -1825,21 +1824,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         favoriteIds: _favoriteIds,
                         recentIds: _recentIds,
                         onMissingTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => MissingInfoReportScreen(
-                                items: _items,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    if (!_loading && !widget.onlyFavorites)
-                      HomeQuickActions(
-                        onScan: _scanAndSearch,
-                        onAdd: _openAddProduct,
-                        onPdf: _printPdf,
-                        onMissing: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => MissingInfoReportScreen(
@@ -1994,7 +1978,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             widget.onlyFavorites
                                 ? 'Favoriler'
                                 : _selectedCategory == filterAll
-                                    ? 'Kayıtlar'
+                                    ? 'Ürünlerim'
                                     : _selectedCategory,
                             style: TextStyle(
                               color: AppUi.text(context),
@@ -2088,8 +2072,8 @@ class _Header extends StatelessWidget {
       builder: (context, compact, _) {
         return Container(
           width: double.infinity,
-          margin: EdgeInsets.all(compact ? 14 : 18),
-          padding: EdgeInsets.all(compact ? 14 : 18),
+          margin: EdgeInsets.fromLTRB(18, 14, 18, 14),
+          padding: EdgeInsets.all(compact ? 13 : 16),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [
@@ -2113,8 +2097,8 @@ class _Header extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: compact ? 62 : 76,
-                height: compact ? 62 : 76,
+                width: compact ? 58 : 68,
+                height: compact ? 58 : 68,
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -2137,7 +2121,7 @@ class _Header extends StatelessWidget {
                       title,
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: compact ? 23 : 27,
+                        fontSize: compact ? 23 : 25,
                         fontWeight: FontWeight.w900,
                         height: 1,
                       ),
@@ -2146,7 +2130,7 @@ class _Header extends StatelessWidget {
                       subtitle,
                       style: TextStyle(
                         color: AppColors.green,
-                        fontSize: compact ? 19 : 22,
+                        fontSize: compact ? 18 : 20,
                         fontWeight: FontWeight.w800,
                         height: 1.15,
                       ),
@@ -5129,73 +5113,45 @@ class ProfessionalDashboard extends StatelessWidget {
         items.where((item) => missingFieldsForItem(item).isNotEmpty).length;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _DashboardMiniCard(
-                  title: 'Toplam',
-                  value: items.length.toString(),
-                  icon: Icons.inventory_2_rounded,
-                ),
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppUi.card(context),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppUi.border(context)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _DashboardCompactItem(
+                title: 'Toplam',
+                value: items.length.toString(),
+                icon: Icons.inventory_2_rounded,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DashboardMiniCard(
-                  title: 'Favori',
-                  value: favoriteCount.toString(),
-                  icon: Icons.star_rounded,
-                ),
+            ),
+            _DashboardDivider(),
+            Expanded(
+              child: _DashboardCompactItem(
+                title: 'Favori',
+                value: favoriteCount.toString(),
+                icon: Icons.star_rounded,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _DashboardMiniCard(
+            ),
+            _DashboardDivider(),
+            Expanded(
+              child: InkWell(
+                onTap: missingCount > 0 ? onMissingTap : null,
+                borderRadius: BorderRadius.circular(16),
+                child: _DashboardCompactItem(
                   title: 'Eksik',
                   value: missingCount.toString(),
                   icon: Icons.warning_amber_rounded,
                 ),
               ),
-            ],
-          ),
-          if (missingCount > 0) ...[
-            const SizedBox(height: 10),
-            Material(
-              color: AppColors.green.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                onTap: onMissingTap,
-                borderRadius: BorderRadius.circular(18),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.fact_check_rounded,
-                        color: AppColors.green,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          '$missingCount üründe eksik bilgi var. Raporu aç.',
-                          style: TextStyle(
-                            color: AppUi.text(context),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppUi.muted(context),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -5214,35 +5170,72 @@ class _DashboardMiniCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _DashboardCompactItem(
+      title: title,
+      value: value,
+      icon: icon,
+    );
+  }
+}
+
+class _DashboardCompactItem extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _DashboardCompactItem({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          color: AppColors.green,
+          size: 25,
+        ),
+        const SizedBox(width: 9),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                color: AppUi.text(context),
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: TextStyle(
+                color: AppUi.muted(context),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _DashboardDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppUi.card(context),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppUi.border(context)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.green),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              color: AppUi.text(context),
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          Text(
-            title,
-            style: TextStyle(
-              color: AppUi.muted(context),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
+      width: 1,
+      height: 38,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: AppUi.border(context),
     );
   }
 }
