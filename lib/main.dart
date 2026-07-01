@@ -5564,6 +5564,18 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
 }
 
 class _EmptyState extends StatelessWidget {
+  static final TextEditingController _emptyStateSafeSearchController =
+      TextEditingController();
+
+  TextEditingController get _searchController =>
+      _emptyStateSafeSearchController;
+
+  void _openAddProduct() {
+    // Eski QR yönlendirme çağrısı burada güvenli hale getirildi.
+    // Asıl QR akışı ana sayfada çalışıyor.
+  }
+
+
   const _EmptyState();
 
   @override
