@@ -91,7 +91,7 @@ jobs:
           from pathlib import Path
           import re
 
-          def find_block_end(text, open_i):
+          def block_end(text, open_i):
               depth = 0
               for i in range(open_i, len(text)):
                   if text[i] == "{":
@@ -101,6 +101,23 @@ jobs:
                       if depth == 0:
                           return i
               return -1
+
+          def insert_after_named_block(text, pattern, block):
+              m = re.search(pattern, text, re.M)
+              if not m:
+                  raise SystemExit("Blok bulunamadı: " + pattern)
+              open_i = text.find("{", m.start())
+              close_i = block_end(text, open_i)
+              if close_i == -1:
+                  raise SystemExit("Blok kapanışı bulunamadı: " + pattern)
+              return text[:close_i + 1] + block + text[close_i + 1:]
+
+          def insert_inside_block_start(text, pattern, block):
+              m = re.search(pattern, text, re.M)
+              if not m:
+                  raise SystemExit("Blok bulunamadı: " + pattern)
+              open_i = text.find("{", m.start())
+              return text[:open_i + 1] + block + text[open_i + 1:]
 
           kts = Path("android/app/build.gradle.kts")
           groovy = Path("android/app/build.gradle")
@@ -112,49 +129,40 @@ jobs:
                   text = "import java.util.Properties\nimport java.io.FileInputStream\n\n" + text
 
               if "val keystoreProperties = Properties()" not in text:
-                  plugins_i = text.find("plugins")
-                  plugins_open = text.find("{", plugins_i)
-                  plugins_end = find_block_end(text, plugins_open)
-
-                  block = '''
-
-          val keystoreProperties = Properties()
-          val keystorePropertiesFile = rootProject.file("key.properties")
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-          }
-
-          '''
-                  text = text[:plugins_end + 1] + block + text[plugins_end + 1:]
+                  props = "\n\n" + "\n".join([
+                      'val keystoreProperties = Properties()',
+                      'val keystorePropertiesFile = rootProject.file("key.properties")',
+                      'if (keystorePropertiesFile.exists()) {',
+                      '    keystoreProperties.load(FileInputStream(keystorePropertiesFile))',
+                      '}',
+                      ''
+                  ])
+                  text = insert_after_named_block(text, r"^plugins\s*\{", props)
 
               if 'create("release")' not in text:
-                  android_i = text.find("android")
-                  android_open = text.find("{", android_i)
-
-                  block = '''
-              signingConfigs {
-                  create("release") {
-                      keyAlias = keystoreProperties["keyAlias"] as String
-                      keyPassword = keystoreProperties["keyPassword"] as String
-                      storeFile = file(keystoreProperties["storeFile"] as String)
-                      storePassword = keystoreProperties["storePassword"] as String
-                  }
-              }
-
-          '''
-                  text = text[:android_open + 1] + block + text[android_open + 1:]
+                  signing = "\n" + "\n".join([
+                      '    signingConfigs {',
+                      '        create("release") {',
+                      '            keyAlias = keystoreProperties["keyAlias"] as String',
+                      '            keyPassword = keystoreProperties["keyPassword"] as String',
+                      '            storeFile = file(keystoreProperties["storeFile"] as String)',
+                      '            storePassword = keystoreProperties["storePassword"] as String',
+                      '        }',
+                      '    }',
+                      ''
+                  ])
+                  text = insert_inside_block_start(text, r"^android\s*\{", signing)
 
               text = text.replace(
                   'signingConfig = signingConfigs.getByName("debug")',
-                  'signingConfig = signingConfigs.getByName("release")',
+                  'signingConfig = signingConfigs.getByName("release")'
               )
 
-              if 'signingConfigs.getByName("release")' not in text:
-                  text = re.sub(
-                      r"(release\s*\{)",
-                      r'\1\n            signingConfig = signingConfigs.getByName("release")',
-                      text,
-                      count=1,
+              if 'signingConfig = signingConfigs.getByName("release")' not in text:
+                  text = text.replace(
+                      "release {",
+                      'release {\n            signingConfig = signingConfigs.getByName("release")',
+                      1
                   )
 
               kts.write_text(text, encoding="utf-8")
@@ -164,36 +172,35 @@ jobs:
               text = groovy.read_text(encoding="utf-8")
 
               if "def keystoreProperties = new Properties()" not in text:
-                  text = '''def keystoreProperties = new Properties()
-          def keystorePropertiesFile = rootProject.file('key.properties')
-          if (keystorePropertiesFile.exists()) {
-              keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
-          }
-
-          ''' + text
+                  text = "\n".join([
+                      "def keystoreProperties = new Properties()",
+                      "def keystorePropertiesFile = rootProject.file('key.properties')",
+                      "if (keystorePropertiesFile.exists()) {",
+                      "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))",
+                      "}",
+                      "",
+                  ]) + text
 
               if "signingConfigs" not in text:
-                  android_i = text.find("android")
-                  android_open = text.find("{", android_i)
-
-                  block = '''
-              signingConfigs {
-                  release {
-                      keyAlias keystoreProperties['keyAlias']
-                      keyPassword keystoreProperties['keyPassword']
-                      storeFile file(keystoreProperties['storeFile'])
-                      storePassword keystoreProperties['storePassword']
-                  }
-              }
-
-          '''
-                  text = text[:android_open + 1] + block + text[android_open + 1:]
+                  signing = "\n" + "\n".join([
+                      "    signingConfigs {",
+                      "        release {",
+                      "            keyAlias keystoreProperties['keyAlias']",
+                      "            keyPassword keystoreProperties['keyPassword']",
+                      "            storeFile file(keystoreProperties['storeFile'])",
+                      "            storePassword keystoreProperties['storePassword']",
+                      "        }",
+                      "    }",
+                      "",
+                  ])
+                  text = insert_inside_block_start(text, r"^android\s*\{", signing)
 
               text = text.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
               groovy.write_text(text, encoding="utf-8")
               print("Groovy Gradle sabit imza ayarlandı.")
+
           else:
-              raise SystemExit("Gradle dosyası bulunamadı.")
+              raise SystemExit("Gradle dosyası bulunamadı")
           PYSIGN
 
 
