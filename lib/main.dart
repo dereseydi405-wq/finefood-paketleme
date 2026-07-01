@@ -5160,6 +5160,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionTitle(context, 'Ürün yönetimi'),
           _settingsTile(
             context: context,
+            icon: Icons.health_and_safety_rounded,
+            title: 'Veri sağlık kontrolü',
+            subtitle: 'Eksik, tekrar eden veya fotoğrafsız kayıtları kontrol et.',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const DataHealthScreen(),
+                ),
+              );
+            },
+          ),
+          _settingsTile(
+            context: context,
             icon: Icons.qr_code_2_rounded,
             title: 'Toplu QR etiket PDF',
             subtitle: 'Tüm ürünler için QR etiketlerini tek PDF yap.',
@@ -7446,6 +7459,416 @@ class PhotoPreviewScreen extends StatelessWidget {
             fit: BoxFit.contain,
           ),
         ),
+      ),
+    );
+  }
+}
+
+
+class DataHealthResult {
+  final List<PackingItem> items;
+  final List<PackingItem> missingInfoItems;
+  final List<PackingItem> noPhotoItems;
+  final Map<String, List<PackingItem>> duplicateCodes;
+
+  const DataHealthResult({
+    required this.items,
+    required this.missingInfoItems,
+    required this.noPhotoItems,
+    required this.duplicateCodes,
+  });
+
+  int get totalProblems {
+    return missingInfoItems.length + noPhotoItems.length + duplicateCodes.length;
+  }
+}
+
+class DataHealthScreen extends StatelessWidget {
+  const DataHealthScreen({super.key});
+
+  Future<DataHealthResult> _load() async {
+    final items = await StorageHelper.readItems();
+
+    final missingInfoItems = items
+        .where((item) => missingFieldsForItem(item).isNotEmpty)
+        .toList();
+
+    final noPhotoItems = <PackingItem>[];
+
+    for (final item in items) {
+      var hasAnyPhoto = false;
+
+      final mainPhoto = item.imagePath;
+
+      if (mainPhoto != null && mainPhoto.trim().isNotEmpty) {
+        final file = File(mainPhoto);
+
+        if (file.existsSync()) {
+          hasAnyPhoto = true;
+        }
+      }
+
+      if (!hasAnyPhoto) {
+        try {
+          final photos = await ProductPhotoHelper.getPhotosForItem(item.id);
+
+          for (final path in photos.values) {
+            if (path.trim().isNotEmpty && File(path).existsSync()) {
+              hasAnyPhoto = true;
+              break;
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (!hasAnyPhoto) {
+        noPhotoItems.add(item);
+      }
+    }
+
+    final codeMap = <String, List<PackingItem>>{};
+
+    for (final item in items) {
+      final code = item.code?.trim();
+
+      if (code == null || code.isEmpty) continue;
+
+      final key = _normalize(code);
+
+      codeMap.putIfAbsent(key, () => []);
+      codeMap[key]!.add(item);
+    }
+
+    final duplicateCodes = Map<String, List<PackingItem>>.fromEntries(
+      codeMap.entries.where((entry) => entry.value.length > 1),
+    );
+
+    return DataHealthResult(
+      items: items,
+      missingInfoItems: missingInfoItems,
+      noPhotoItems: noPhotoItems,
+      duplicateCodes: duplicateCodes,
+    );
+  }
+
+  Widget _summaryCard({
+    required BuildContext context,
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: AppUi.card(context),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppUi.border(context)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 7),
+            Text(
+              value,
+              style: TextStyle(
+                color: AppUi.text(context),
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppUi.muted(context),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _problemSection({
+    required BuildContext context,
+    required String title,
+    required String emptyText,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    final empty = children.isEmpty;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: AppUi.card(context),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppUi.border(context)),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: !empty,
+        leading: Icon(
+          empty ? Icons.verified_rounded : icon,
+          color: empty ? AppColors.green : Colors.orange,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: AppUi.text(context),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        subtitle: Text(
+          empty ? emptyText : '${children.length} sorun bulundu',
+          style: TextStyle(
+            color: AppUi.muted(context),
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        children: empty
+            ? [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    emptyText,
+                    style: TextStyle(
+                      color: AppUi.muted(context),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ]
+            : children,
+      ),
+    );
+  }
+
+  Widget _itemProblemTile({
+    required BuildContext context,
+    required PackingItem item,
+    required String subtitle,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(top: 9),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.green.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.inventory_2_rounded,
+            color: AppColors.green,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  style: TextStyle(
+                    color: AppUi.text(context),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: AppUi.muted(context),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, DataHealthResult result) {
+    final duplicateWidgets = <Widget>[];
+
+    for (final entry in result.duplicateCodes.entries) {
+      final code = entry.value.first.code ?? entry.key;
+
+      duplicateWidgets.add(
+        Container(
+          margin: const EdgeInsets.only(top: 9),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Tekrar eden kod: $code',
+                style: TextStyle(
+                  color: AppUi.text(context),
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                entry.value.map((item) => item.title).join(' • '),
+                style: TextStyle(
+                  color: AppUi.muted(context),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(18),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: AppColors.navy,
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.health_and_safety_rounded,
+                color: AppColors.green,
+                size: 44,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.totalProblems == 0
+                          ? 'Veriler sağlıklı görünüyor'
+                          : 'Kontrol tamamlandı',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      result.totalProblems == 0
+                          ? 'Şimdilik önemli sorun bulunmadı.'
+                          : '${result.totalProblems} başlıkta kontrol sonucu var.',
+                      style: const TextStyle(
+                        color: AppColors.green,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            _summaryCard(
+              context: context,
+              title: 'Toplam',
+              value: result.items.length.toString(),
+              icon: Icons.inventory_2_rounded,
+              color: AppColors.green,
+            ),
+            const SizedBox(width: 10),
+            _summaryCard(
+              context: context,
+              title: 'Eksik',
+              value: result.missingInfoItems.length.toString(),
+              icon: Icons.warning_amber_rounded,
+              color: Colors.orange,
+            ),
+            const SizedBox(width: 10),
+            _summaryCard(
+              context: context,
+              title: 'Fotoğrafsız',
+              value: result.noPhotoItems.length.toString(),
+              icon: Icons.no_photography_rounded,
+              color: Colors.redAccent,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _problemSection(
+          context: context,
+          title: 'Eksik bilgili ürünler',
+          emptyText: 'Eksik bilgi bulunmadı.',
+          icon: Icons.warning_amber_rounded,
+          children: result.missingInfoItems.map((item) {
+            final missing = missingFieldsForItem(item);
+
+            return _itemProblemTile(
+              context: context,
+              item: item,
+              subtitle: 'Eksik: ${missing.join(', ')}',
+            );
+          }).toList(),
+        ),
+        _problemSection(
+          context: context,
+          title: 'Fotoğrafı olmayan ürünler',
+          emptyText: 'Fotoğrafsız ürün bulunmadı.',
+          icon: Icons.no_photography_rounded,
+          children: result.noPhotoItems.map((item) {
+            return _itemProblemTile(
+              context: context,
+              item: item,
+              subtitle: 'Bu ürüne henüz fotoğraf eklenmemiş.',
+            );
+          }).toList(),
+        ),
+        _problemSection(
+          context: context,
+          title: 'Tekrar eden kodlar',
+          emptyText: 'Tekrar eden kod bulunmadı.',
+          icon: Icons.content_copy_rounded,
+          children: duplicateWidgets,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: const Text('Veri Sağlık Kontrolü'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: FutureBuilder<DataHealthResult>(
+        future: _load(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.green),
+            );
+          }
+
+          return _buildContent(context, snapshot.data!);
+        },
       ),
     );
   }
