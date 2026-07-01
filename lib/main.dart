@@ -21,6 +21,7 @@ const String recentStorageKey = 'recent_item_ids_v1';
 const String searchHistoryStorageKey = 'search_history_v1';
 const String autoBackupStorageKey = 'auto_backup_v1';
 const String pinStorageKey = 'app_pin_v1';
+const String accessModeStorageKey = 'access_mode_v1';
 const String trashStorageKey = 'deleted_items_v1';
 const String historyStorageKey = 'change_history_v1';
 
@@ -1187,39 +1188,55 @@ class _MainShellState extends State<MainShell> {
   int _refreshToken = 0;
 
   Future<void> _openAddProduct() async {
-    final newItem = await Navigator.of(context).push<PackingItem>(
-      MaterialPageRoute(
-        builder: (_) => const AddProductScreen(),
-      ),
-    );
+  final isAdmin = await AccessModeHelper.isAdmin();
 
-    if (newItem == null) return;
-
-    final items = await StorageHelper.readItems();
-    await StorageHelper.saveAutoBackup(items);
-
-    final updatedItems = [
-      ...items,
-      newItem,
-    ];
-
-    await StorageHelper.saveItems(updatedItems);
-
+  if (!isAdmin) {
     if (!mounted) return;
 
-    setState(() {
-      _refreshToken++;
-      _selectedIndex = 0;
-    });
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${newItem.title} eklendi'),
+      const SnackBar(
+        content: Text('Çalışan modunda ürün ekleme kapalı.'),
         behavior: SnackBarBehavior.floating,
         backgroundColor: AppColors.navy,
       ),
     );
+
+    return;
   }
+
+  final newItem = await Navigator.of(context).push<PackingItem>(
+    MaterialPageRoute(
+      builder: (_) => const AddProductScreen(),
+    ),
+  );
+
+  if (newItem == null) return;
+
+  final items = await StorageHelper.readItems();
+  await StorageHelper.saveAutoBackup(items);
+
+  final updatedItems = [
+    ...items,
+    newItem,
+  ];
+
+  await StorageHelper.saveItems(updatedItems);
+
+  if (!mounted) return;
+
+  setState(() {
+    _refreshToken++;
+    _selectedIndex = 0;
+  });
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('${newItem.title} eklendi'),
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: AppColors.navy,
+    ),
+  );
+}
 
   void _onTabTapped(int index) {
     if (index == 2) {
@@ -3086,6 +3103,7 @@ class DetailScreen extends StatefulWidget {
 class _DetailScreenState extends State<DetailScreen> {
   late PackingItem _item;
   late bool _isFavorite;
+  bool _isAdmin = true;
 
   bool get _hasImage {
     final path = _item.imagePath;
@@ -3100,6 +3118,17 @@ class _DetailScreenState extends State<DetailScreen> {
     super.initState();
     _item = widget.item;
     _isFavorite = widget.isFavorite;
+    _loadAdminMode();
+  }
+
+  Future<void> _loadAdminMode() async {
+    final isAdmin = await AccessModeHelper.isAdmin();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isAdmin = isAdmin;
+    });
   }
 
   Future<void> _copyAll(BuildContext context) async {
@@ -3295,21 +3324,24 @@ class _DetailScreenState extends State<DetailScreen> {
             icon: const Icon(Icons.qr_code_2_rounded),
             tooltip: 'QR oluştur',
           ),
-          IconButton(
-            onPressed: _duplicateItem,
-            icon: const Icon(Icons.copy_all_rounded),
-            tooltip: 'Ürünü çoğalt',
-          ),
-          IconButton(
-            onPressed: _editItem,
-            icon: const Icon(Icons.edit_rounded),
-            tooltip: 'Düzenle',
-          ),
-          IconButton(
-            onPressed: _confirmDelete,
-            icon: const Icon(Icons.delete_rounded),
-            tooltip: 'Sil',
-          ),
+          if (_isAdmin)
+            IconButton(
+              onPressed: _duplicateItem,
+              icon: const Icon(Icons.copy_all_rounded),
+              tooltip: 'Ürünü çoğalt',
+            ),
+          if (_isAdmin)
+            IconButton(
+              onPressed: _editItem,
+              icon: const Icon(Icons.edit_rounded),
+              tooltip: 'Düzenle',
+            ),
+          if (_isAdmin)
+            IconButton(
+              onPressed: _confirmDelete,
+              icon: const Icon(Icons.delete_rounded),
+              tooltip: 'Sil',
+            ),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -3650,6 +3682,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _openRestore(BuildContext context) async {
+    final isAdmin = await AccessModeHelper.isAdmin();
+
+    if (!isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Çalışan modunda yedekten geri yükleme kapalı.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.navy,
+        ),
+      );
+      return;
+    }
+
     final restored = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => const RestoreBackupScreen(),
@@ -3672,6 +3717,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _openBulkAdd(BuildContext context) async {
+    final isAdmin = await AccessModeHelper.isAdmin();
+
+    if (!isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Çalışan modunda toplu ürün ekleme kapalı.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.navy,
+        ),
+      );
+      return;
+    }
+
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => const BulkAddScreen(),
@@ -4247,6 +4305,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 14),
           _sectionTitle(context, 'Güvenlik'),
+          _settingsTile(
+            context: context,
+            icon: Icons.admin_panel_settings_rounded,
+            title: 'Admin / Çalışan modu',
+            subtitle: 'Kim ürünleri düzenleyebilir seç.',
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AccessModeScreen(),
+                ),
+              );
+              setState(() {});
+            },
+          ),
           _settingsTile(
             context: context,
             icon: Icons.lock_rounded,
@@ -5625,6 +5697,186 @@ class ChangeHistoryScreen extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+
+class AccessModeHelper {
+  static Future<bool> isAdmin() async {
+    final prefs = await SharedPreferences.getInstance();
+    final mode = prefs.getString(accessModeStorageKey) ?? 'admin';
+    return mode == 'admin';
+  }
+
+  static Future<String> currentMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(accessModeStorageKey) ?? 'admin';
+  }
+
+  static Future<void> setMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(accessModeStorageKey, mode);
+  }
+}
+
+class AccessModeScreen extends StatefulWidget {
+  const AccessModeScreen({super.key});
+
+  @override
+  State<AccessModeScreen> createState() => _AccessModeScreenState();
+}
+
+class _AccessModeScreenState extends State<AccessModeScreen> {
+  String _mode = 'admin';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMode();
+  }
+
+  Future<void> _loadMode() async {
+    final mode = await AccessModeHelper.currentMode();
+
+    if (!mounted) return;
+
+    setState(() {
+      _mode = mode;
+      _loading = false;
+    });
+  }
+
+  Future<void> _setMode(String mode) async {
+    await AccessModeHelper.setMode(mode);
+
+    if (!mounted) return;
+
+    setState(() {
+      _mode = mode;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          mode == 'admin'
+              ? 'Admin modu açıldı.'
+              : 'Çalışan modu açıldı.',
+        ),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.navy,
+      ),
+    );
+  }
+
+  Widget _modeCard({
+    required String mode,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final selected = _mode == mode;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppUi.card(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: selected ? AppColors.green : AppUi.border(context),
+          width: selected ? 2 : 1,
+        ),
+      ),
+      child: RadioListTile<String>(
+        value: mode,
+        groupValue: _mode,
+        activeColor: AppColors.green,
+        onChanged: (value) {
+          if (value == null) return;
+          _setMode(value);
+        },
+        secondary: Icon(
+          icon,
+          color: selected ? AppColors.green : AppUi.muted(context),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: AppUi.text(context),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: AppUi.muted(context),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: const Text('Admin / Çalışan Modu'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.green),
+            )
+          : ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.navy,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings_rounded,
+                        color: AppColors.green,
+                        size: 36,
+                      ),
+                      SizedBox(width: 14),
+                      Expanded(
+                        child: Text(
+                          'Admin modu düzenleme yetkisi verir. Çalışan modu sadece arama ve görüntüleme içindir.',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _modeCard(
+                  mode: 'admin',
+                  title: 'Admin modu',
+                  subtitle:
+                      'Ürün ekleme, düzenleme, silme, çoğaltma ve toplu ekleme açık.',
+                  icon: Icons.verified_user_rounded,
+                ),
+                _modeCard(
+                  mode: 'worker',
+                  title: 'Çalışan modu',
+                  subtitle:
+                      'Sadece arama, detay görme, kopyalama, QR ve PDF kullanımı açık.',
+                  icon: Icons.badge_rounded,
+                ),
+              ],
+            ),
     );
   }
 }
