@@ -4934,7 +4934,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
           ),
-,
           _settingsTile(
             context: context,
             icon: Icons.copy_all_rounded,
