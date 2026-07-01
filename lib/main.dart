@@ -9,6 +9,7 @@ import 'package:simple_barcode_scanner/simple_barcode_scanner.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:barcode/barcode.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5801,6 +5802,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionTitle(context, 'Yedekleme'),
           _settingsTile(
             context: context,
+            icon: Icons.ios_share_rounded,
+            title: 'Yedek dosyası paylaş',
+            subtitle: 'Tüm ürünleri paylaşılabilir JSON dosyası yap.',
+            onTap: () async {
+              final messenger = ScaffoldMessenger.of(context);
+
+              try {
+                final file = await BackupShareHelper.createBackupFile();
+
+                if (!context.mounted) return;
+
+                await Share.shareXFiles(
+                  [XFile(file.path)],
+                  text: 'Finefood Paketleme ürün yedeği',
+                  subject: 'Finefood Paketleme Yedek',
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Yedek oluşturulamadı: $e'),
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: AppColors.navy,
+                  ),
+                );
+              }
+            },
+          ),
+          _settingsTile(
+            context: context,
             icon: Icons.copy_all_rounded,
             title: 'Yedek kodu oluştur',
             subtitle: 'Tüm ürünleri kopyalanabilir yedek koduna çevirir.',
@@ -8379,6 +8409,58 @@ class DataHealthScreen extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+
+class BackupShareHelper {
+  static Future<File> createBackupFile() async {
+    final items = await StorageHelper.readItems();
+
+    Map<String, String> multiPhotos = {};
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final rawPhotos = prefs.getString(multiPhotoStorageKey);
+
+      if (rawPhotos != null && rawPhotos.trim().isNotEmpty) {
+        final decoded = jsonDecode(rawPhotos) as Map<String, dynamic>;
+
+        multiPhotos = decoded.map(
+          (key, value) => MapEntry(key, value.toString()),
+        );
+      }
+    } catch (_) {
+      multiPhotos = {};
+    }
+
+    final data = {
+      'app': 'Finefood Paketleme',
+      'type': 'finefood_backup',
+      'version': 1,
+      'createdAt': DateTime.now().toIso8601String(),
+      'productCount': items.length,
+      'items': items.map((item) => item.toJson()).toList(),
+      'multiPhotos': multiPhotos,
+    };
+
+    final dir = await getApplicationDocumentsDirectory();
+    final backupDir = Directory('${dir.path}/finefood_backups');
+
+    if (!backupDir.existsSync()) {
+      backupDir.createSync(recursive: true);
+    }
+
+    final now = DateTime.now();
+    final fileName =
+        'finefood_yedek_${now.year}_${now.month.toString().padLeft(2, '0')}_${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}_${now.minute.toString().padLeft(2, '0')}.json';
+
+    final file = File('${backupDir.path}/$fileName');
+
+    const encoder = JsonEncoder.withIndent('  ');
+    await file.writeAsString(encoder.convert(data), encoding: utf8);
+
+    return file;
   }
 }
 

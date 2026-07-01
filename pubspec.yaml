@@ -2,7 +2,7 @@ name: finefood_paketleme
 description: Finefood Paketleme arama uygulamasi
 publish_to: "none"
 
-version: 1.0.0+26
+version: 1.0.0+27
 
 environment:
   sdk: ^3.7.0
@@ -13,6 +13,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.5.3
   image_picker: ^1.2.1
+  share_plus: ^10.1.4
   path_provider: ^2.1.5
   simple_barcode_scanner: ^0.6.0
   pdf: ^3.13.0
