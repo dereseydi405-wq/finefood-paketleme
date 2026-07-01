@@ -35,6 +35,7 @@ const String filterMine = 'Benim Eklediklerim';
 const String filterReady = 'Hazır Ürünler';
 const String filterMissing = 'Eksik Bilgili';
 
+import 'package:mobile_scanner/mobile_scanner.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AppSettings.loadAll();
@@ -1868,34 +1869,163 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await _saveSearchHistory();
   }
-
   Future<void> _scanAndSearch() async {
-  final result = await SimpleBarcodeScanner.scanBarcode(
-    context,
-    barcodeAppBar: const BarcodeAppBar(
-      appBarTitle: 'Kod Okut',
-      centerTitle: false,
-      enableBackButton: true,
-      backButtonIcon: Icon(Icons.arrow_back_ios),
-    ),
-    isShowFlashIcon: true,
-    delayMillis: 500,
-    cameraFace: CameraFace.back,
-  );
+    if (!mounted) return;
 
-  if (result == null || result.trim().isEmpty || result == '-1') return;
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppUi.card(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppUi.border(context),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ListTile(
+                  leading: const Icon(Icons.qr_code_scanner_rounded, color: AppColors.green),
+                  title: const Text('Kamera ile okut'),
+                  subtitle: const Text('Barkod veya QR kodu kameradan tara'),
+                  onTap: () => Navigator.pop(context, 'camera'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_rounded, color: AppColors.green),
+                  title: const Text('Galeriden QR seç'),
+                  subtitle: const Text('Telefondaki QR görselini okut'),
+                  onTap: () => Navigator.pop(context, 'gallery'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
 
-  _searchController.text = result.trim();
+    if (choice == 'camera') await _scanCodeWithCameraSmart();
+    if (choice == 'gallery') await _scanCodeFromGallerySmart();
+  }
 
-  setState(() {
-    _query = result.trim();
-  });
+  Future<void> _scanCodeWithCameraSmart() async {
+    final result = await SimpleBarcodeScanner.scanBarcode(
+      context,
+      barcodeAppBar: const BarcodeAppBar(
+        appBarTitle: 'Kod okut',
+        centerTitle: true,
+        enableBackButton: true,
+        backButtonIcon: Icon(Icons.arrow_back_ios),
+      ),
+      isShowFlashIcon: true,
+      delayMillis: 500,
+      cameraFace: CameraFace.back,
+    );
 
-  await _addSearchHistory(result.trim());
+    await _handleSmartScannedCode(result);
+  }
 
-  if (!mounted) return;
-  _showSnack('Kod okutuldu: ${result.trim()}');
-}
+  Future<void> _scanCodeFromGallerySmart() async {
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      final controller = MobileScannerController();
+      final capture = await controller.analyzeImage(picked.path);
+      controller.dispose();
+
+      final code = capture?.barcodes
+          .map((b) => b.rawValue)
+          .whereType<String>()
+          .where((v) => v.trim().isNotEmpty)
+          .cast<String?>()
+          .firstOrNull;
+
+      await _handleSmartScannedCode(code);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Galeriden QR okunamadı: $e')),
+      );
+    }
+  }
+
+  Future<void> _handleSmartScannedCode(String? code) async {
+    final cleaned = (code ?? '').trim();
+    if (cleaned.isEmpty || cleaned == '-1') return;
+
+    PackingItem? found;
+    for (final item in _items) {
+      if (_codeMatchesItemSmart(item, cleaned)) {
+        found = item;
+        break;
+      }
+    }
+
+    if (found != null) {
+      _applyCodeToSearchSmart(cleaned);
+      if (!mounted) return;
+      _openDetail(found);
+      return;
+    }
+
+    if (!mounted) return;
+    final addNew = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Kod kayıtlı değil'),
+        content: Text('$cleaned kodu ürünlerde bulunamadı. Yeni ürün ekleyelim mi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yeni ürün ekle'),
+          ),
+        ],
+      ),
+    );
+
+    if (addNew == true) {
+      await Clipboard.setData(ClipboardData(text: cleaned));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kod kopyalandı: $cleaned')),
+      );
+      _openAddProduct();
+    }
+  }
+
+  bool _codeMatchesItemSmart(PackingItem item, String code) {
+    final q = _normalize(code);
+    final parts = <String>[
+      item.title,
+      item.category,
+      item.code ?? '',
+      ...item.details.keys,
+      ...item.details.values,
+    ];
+
+    return parts.any((p) => _normalize(p).contains(q));
+  }
+
+  void _applyCodeToSearchSmart(String code) {
+    _searchController.text = code;
+    setState(() {
+      _query = code;
+    });
+  }
 
   Future<void> _printPdf() async {
     if (_items.isEmpty) {
@@ -7620,3 +7750,12 @@ class BackupShareHelper {
   }
 }
 
+
+
+extension _FinefoodFirstOrNullExtension<T> on Iterable<T> {
+  T? get firstOrNull {
+    final iterator = this.iterator;
+    if (iterator.moveNext()) return iterator.current;
+    return null;
+  }
+}
