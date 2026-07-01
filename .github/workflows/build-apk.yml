@@ -66,7 +66,48 @@ jobs:
           fi
 
       - name: APK oluştur
-        run: flutter build apk --release
+        run: |
+          python3 - <<'PYSDK'
+          from pathlib import Path
+          import re
+
+          files = [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle"),
+          ]
+
+          ok = False
+
+          for p in files:
+              if not p.exists():
+                  continue
+
+              text = p.read_text(encoding="utf-8")
+
+              text = re.sub(
+                  r"compileSdk\s*=\s*(flutter\.compileSdkVersion|\d+)",
+                  "compileSdk = 36",
+                  text,
+              )
+              text = re.sub(
+                  r"compileSdkVersion\s+(flutter\.compileSdkVersion|\d+)",
+                  "compileSdkVersion 36",
+                  text,
+              )
+
+              p.write_text(text, encoding="utf-8")
+
+              for line in text.splitlines():
+                  if "compileSdk" in line:
+                      print(f"{p}: {line}")
+                      if "36" in line:
+                          ok = True
+
+          if not ok:
+              raise SystemExit("compileSdk 36 uygulanamadı")
+          PYSDK
+
+          flutter build apk --release
 
       - name: APK ismini ayarla
         run: |
