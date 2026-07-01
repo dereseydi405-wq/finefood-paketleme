@@ -76,6 +76,16 @@ jobs:
               Path("android/app/build.gradle"),
           ]
 
+          files += list(Path(".").glob("**/build.gradle.kts"))
+          files += list(Path(".").glob("**/build.gradle"))
+
+          home = Path.home()
+          files += list(home.glob(".pub-cache/hosted/**/android/build.gradle.kts"))
+          files += list(home.glob(".pub-cache/hosted/**/android/build.gradle"))
+
+          seen = set()
+          files = [x for x in files if not (str(x) in seen or seen.add(str(x)))]
+
           ok = False
 
           for p in files:
@@ -94,6 +104,8 @@ jobs:
                   "compileSdkVersion 36",
                   text,
               )
+              text = text.replace("compileSdk = 34", "compileSdk = 36")
+              text = text.replace("compileSdkVersion 34", "compileSdkVersion 36")
 
               p.write_text(text, encoding="utf-8")
 
