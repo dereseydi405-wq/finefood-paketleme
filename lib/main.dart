@@ -1617,25 +1617,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _scanAndSearch() async {
-    final code = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => const QrScannerScreen(),
-      ),
-    );
+  final result = await SimpleBarcodeScanner.scanBarcode(
+    context,
+    barcodeAppBar: const BarcodeAppBar(
+      appBarTitle: 'Kod Okut',
+      centerTitle: false,
+      enableBackButton: true,
+      backButtonIcon: Icon(Icons.arrow_back_ios),
+    ),
+    isShowFlashIcon: true,
+    delayMillis: 500,
+    cameraFace: CameraFace.back,
+  );
 
-    if (code == null || code.trim().isEmpty) return;
+  if (result == null || result.trim().isEmpty || result == '-1') return;
 
-    _searchController.text = code.trim();
+  _searchController.text = result.trim();
 
-    setState(() {
-      _query = code.trim();
-    });
+  setState(() {
+    _query = result.trim();
+  });
 
-    await _addSearchHistory(code.trim());
+  await _addSearchHistory(result.trim());
 
-    if (!mounted) return;
-    _showSnack('Kod okutuldu: ${code.trim()}');
-  }
+  if (!mounted) return;
+  _showSnack('Kod okutuldu: ${result.trim()}');
+}
 
   Future<void> _printPdf() async {
     if (_items.isEmpty) {
@@ -2342,18 +2349,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Future<void> _scanCode() async {
-    final code = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        builder: (_) => const QrScannerScreen(),
-      ),
-    );
+  final result = await SimpleBarcodeScanner.scanBarcode(
+    context,
+    barcodeAppBar: const BarcodeAppBar(
+      appBarTitle: 'Kod Okut',
+      centerTitle: false,
+      enableBackButton: true,
+      backButtonIcon: Icon(Icons.arrow_back_ios),
+    ),
+    isShowFlashIcon: true,
+    delayMillis: 500,
+    cameraFace: CameraFace.back,
+  );
 
-    if (code == null || code.trim().isEmpty) return;
+  if (result == null || result.trim().isEmpty || result == '-1') return;
 
-    setState(() {
-      _codeController.text = code.trim();
-    });
-  }
+  setState(() {
+    _codeController.text = result.trim();
+  });
+}
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -2727,82 +2741,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 }
 
-class QrScannerScreen extends StatefulWidget {
-  const QrScannerScreen({super.key});
 
-  @override
-  State<QrScannerScreen> createState() => _QrScannerScreenState();
-}
 
-class _QrScannerScreenState extends State<QrScannerScreen> {
-  bool _scanned = false;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: const Text('Kod Okut'),
-        backgroundColor: AppColors.navy,
-        foregroundColor: Colors.white,
-      ),
-      body: Stack(
-        children: [
-          MobileScanner(
-            onDetect: (capture) {
-              if (_scanned) return;
 
-              final barcodes = capture.barcodes;
 
-              if (barcodes.isEmpty) return;
-
-              final value = barcodes.first.rawValue;
-
-              if (value == null || value.trim().isEmpty) return;
-
-              _scanned = true;
-
-              Navigator.of(context).pop(value.trim());
-            },
-          ),
-          Center(
-            child: Container(
-              width: 240,
-              height: 240,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: AppColors.green,
-                  width: 4,
-                ),
-                borderRadius: BorderRadius.circular(24),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 24,
-            right: 24,
-            bottom: 36,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.65),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Text(
-                'Barkod veya QR kodu kutunun içine getir.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class BulkAddScreen extends StatefulWidget {
   const BulkAddScreen({super.key});
