@@ -3290,6 +3290,594 @@ class _DetailScreenState extends State<DetailScreen> {
 
   bool get _hasImage {
     final path = _item.imagePath;
+    if (path == null || path.trim().isEmpty) return false;
+    return File(path).existsSync();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _item = widget.item;
+    _isFavorite = widget.isFavorite;
+    _loadAdminMode();
+  }
+
+  Future<void> _loadAdminMode() async {
+    final isAdmin = await AccessModeHelper.isAdmin();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isAdmin = isAdmin;
+    });
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.navy,
+      ),
+    );
+  }
+
+  Future<void> _copyAll() async {
+    await Clipboard.setData(ClipboardData(text: _item.copyText));
+
+    if (!mounted) return;
+    _showSnack('${_item.title} bilgileri kopyalandı');
+  }
+
+  Future<void> _copyField(String title, String value) async {
+    await Clipboard.setData(ClipboardData(text: value));
+
+    if (!mounted) return;
+    _showSnack('$title kopyalandı');
+  }
+
+  Future<void> _toggleFavorite() async {
+    final value = await widget.onToggleFavorite(_item);
+
+    if (!mounted) return;
+
+    setState(() {
+      _isFavorite = value;
+    });
+  }
+
+  Future<void> _editItem() async {
+    if (!_isAdmin) {
+      _showSnack('Çalışan modunda düzenleme kapalı.');
+      return;
+    }
+
+    final updated = await Navigator.of(context).push<PackingItem>(
+      MaterialPageRoute(
+        builder: (_) => AddProductScreen(existingItem: _item),
+      ),
+    );
+
+    if (updated == null) return;
+
+    await widget.onUpdate(updated);
+
+    if (!mounted) return;
+
+    setState(() {
+      _item = updated;
+    });
+  }
+
+  Future<void> _duplicateItem() async {
+    if (!_isAdmin) {
+      _showSnack('Çalışan modunda çoğaltma kapalı.');
+      return;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ürün çoğaltılsın mı?'),
+        content: Text('${_item.title} için kopya kayıt oluşturulsun mu?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.green,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Çoğalt'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      await widget.onDuplicate(_item);
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    if (!_isAdmin) {
+      _showSnack('Çalışan modunda silme kapalı.');
+      return;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Ürünü sil?'),
+        content: Text('${_item.title} çöp kutusuna taşınsın mı?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != true) return;
+
+    await widget.onDelete(_item);
+
+    if (!mounted) return;
+
+    Navigator.of(context).pop();
+  }
+
+  Color _fieldColor(String key) {
+    final normalized = _normalize(key);
+
+    if (normalized.contains('poset')) return const Color(0xFF43A047);
+    if (normalized.contains('koli yazici')) return const Color(0xFF42A5F5);
+    if (normalized.contains('koli')) return const Color(0xFFAB47BC);
+    if (normalized.contains('skt')) return const Color(0xFFFFA726);
+    if (normalized.contains('robot')) return const Color(0xFF26C6DA);
+    if (normalized.contains('palet')) return const Color(0xFFEF5350);
+    if (normalized.contains('kg')) return const Color(0xFF8D6E63);
+
+    return AppColors.green;
+  }
+
+  IconData _fieldIcon(String key) {
+    final normalized = _normalize(key);
+
+    if (normalized.contains('poset')) return Icons.edit_note_rounded;
+    if (normalized.contains('koli yazici')) return Icons.inventory_rounded;
+    if (normalized.contains('koli')) return Icons.archive_rounded;
+    if (normalized.contains('skt')) return Icons.event_available_rounded;
+    if (normalized.contains('robot')) return Icons.smart_toy_rounded;
+    if (normalized.contains('palet')) return Icons.view_in_ar_rounded;
+
+    if (normalized.contains('filim') || normalized.contains('film')) {
+      return Icons.layers_rounded;
+    }
+
+    if (normalized.contains('kg')) return Icons.monitor_weight_rounded;
+
+    return Icons.info_rounded;
+  }
+
+  Widget _quickButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool filled = false,
+  }) {
+    final bg = filled ? AppColors.green : AppUi.card(context);
+    final fg = filled ? Colors.white : AppUi.text(context);
+
+    return Expanded(
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: filled ? AppColors.green : AppUi.border(context),
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(icon, color: fg, size: 24),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: fg,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoCard(MapEntry<String, String> entry) {
+    final color = _fieldColor(entry.key);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: AppUi.card(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppUi.border(context)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: () => _copyField(entry.key, entry.value),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.13),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    _fieldIcon(entry.key),
+                    color: color,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.key,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        entry.value,
+                        style: TextStyle(
+                          color: AppUi.text(context),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.copy_rounded,
+                  color: AppUi.muted(context),
+                  size: 22,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _heroHeader() {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.navy,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(
+              AppUi.isDark(context) ? 0.28 : 0.10,
+            ),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          if (_hasImage) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Image.file(
+                File(_item.imagePath!),
+                height: 190,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Image.asset(
+                  'assets/icon/app_icon.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _item.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 27,
+                        fontWeight: FontWeight.w900,
+                        height: 1.05,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _smallHeaderBadge(
+                          icon: Icons.category_rounded,
+                          text: _item.category,
+                        ),
+                        if (_item.code != null &&
+                            _item.code!.trim().isNotEmpty)
+                          _smallHeaderBadge(
+                            icon: Icons.qr_code_rounded,
+                            text: _item.code!,
+                          ),
+                        if (_isFavorite)
+                          _smallHeaderBadge(
+                            icon: Icons.star_rounded,
+                            text: 'Favori',
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _smallHeaderBadge({
+    required IconData icon,
+    required String text,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppColors.green, size: 16),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<MapEntry<String, String>> get _sortedDetails {
+    final priority = [
+      'Poşet yazıcı',
+      'Koli yazıcı',
+      'Koli',
+      'Palet',
+      'SKT',
+      'Skt',
+      'Robot sırası',
+      'Koli içi poşet sayısı',
+      'Tam palet kg',
+      'Filim',
+    ];
+
+    final result = <MapEntry<String, String>>[];
+
+    for (final key in priority) {
+      final match = _item.details.entries.where(
+        (entry) => _normalize(entry.key) == _normalize(key),
+      );
+
+      if (match.isNotEmpty) {
+        final entry = match.first;
+
+        if (!result.any((e) => _normalize(e.key) == _normalize(entry.key))) {
+          result.add(entry);
+        }
+      }
+    }
+
+    for (final entry in _item.details.entries) {
+      if (!result.any((e) => _normalize(e.key) == _normalize(entry.key))) {
+        result.add(entry);
+      }
+    }
+
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: const Text('Ürün Detayı'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: _toggleFavorite,
+            icon: Icon(
+              _isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+            ),
+            color: _isFavorite ? Colors.amber : Colors.white,
+            tooltip: 'Favori',
+          ),
+          if (_isAdmin)
+            IconButton(
+              onPressed: _editItem,
+              icon: const Icon(Icons.edit_rounded),
+              tooltip: 'Düzenle',
+            ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          _heroHeader(),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _quickButton(
+                icon: Icons.copy_rounded,
+                label: 'Kopyala',
+                onTap: _copyAll,
+                filled: true,
+              ),
+              const SizedBox(width: 9),
+              _quickButton(
+                icon: Icons.qr_code_2_rounded,
+                label: 'QR',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProductQrScreen(item: _item),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 9),
+              _quickButton(
+                icon: Icons.history_rounded,
+                label: 'Geçmiş',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ChangeHistoryScreen(
+                        itemId: _item.id,
+                        title: _item.title,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          if (_isAdmin) ...[
+            const SizedBox(height: 9),
+            Row(
+              children: [
+                _quickButton(
+                  icon: Icons.copy_all_rounded,
+                  label: 'Çoğalt',
+                  onTap: _duplicateItem,
+                ),
+                const SizedBox(width: 9),
+                _quickButton(
+                  icon: Icons.delete_rounded,
+                  label: 'Sil',
+                  onTap: _confirmDelete,
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Text(
+                'Bilgiler',
+                style: TextStyle(
+                  color: AppUi.text(context),
+                  fontSize: 24,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: AppColors.green.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${_item.details.length} alan',
+                  style: const TextStyle(
+                    color: AppColors.green,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ..._sortedDetails.map(_infoCard),
+          const SizedBox(height: 30),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailScreenState extends State<DetailScreen> {
+  late PackingItem _item;
+  late bool _isFavorite;
+  bool _isAdmin = true;
+
+  bool get _hasImage {
+    final path = _item.imagePath;
 
     if (path == null || path.trim().isEmpty) return false;
 
