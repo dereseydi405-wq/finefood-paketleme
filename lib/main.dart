@@ -4876,7 +4876,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
             },
-          )
+          ),
 
           _settingsTile(
             context: context,
