@@ -4356,6 +4356,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+
+  Future<void> _testCloudBackupConnection(BuildContext context) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Bulut bağlantısı kontrol ediliyor...'),
+      ),
+    );
+
+    try {
+      await Supabase.instance.client
+          .from('finefood_products')
+          .select('id')
+          .limit(1);
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bulut bağlantısı başarılı. Supabase hazır.'),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bulut bağlantısı başarısız: $e'),
+        ),
+      );
+    }
+  }
+
   Future<void> _copyBackup(BuildContext context) async {
     final items = await StorageHelper.readItems();
     final backupCode = StorageHelper.createBackupCode(items);
@@ -5070,6 +5102,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionTitle(context, 'Yedekleme'),
           _settingsTile(
             context: context,
+            icon: Icons.cloud_done_rounded,
+            title: 'Bulut bağlantısını test et',
+            subtitle: 'Supabase tablo ve internet bağlantısını kontrol eder.',
+            onTap: () => _testCloudBackupConnection(context),
+          ),
+
+          _settingsTile(
+            context: context,
             icon: Icons.ios_share_rounded,
             title: 'Yedek dosyası paylaş',
             subtitle: 'Tüm ürünleri paylaşılabilir JSON dosyası yap.',
@@ -5157,14 +5197,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _settingsTile(
             context: context,
             icon: Icons.cloud_upload_rounded,
-            title: 'Buluta yedekle',
+            title: 'Buluta yedekle (Supabase)',
             subtitle: 'Telefondaki ürünleri Supabase veritabanına kaydeder.',
             onTap: () => _uploadCloudBackup(context),
           ),
           _settingsTile(
             context: context,
             icon: Icons.cloud_download_rounded,
-            title: 'Buluttan geri yükle',
+            title: 'Buluttan geri yükle (Supabase)',
             subtitle: 'Supabase kayıtlarını telefona indirir.',
             onTap: () => _downloadCloudBackup(context),
           ),
