@@ -21,6 +21,7 @@ const String searchHistoryStorageKey = 'search_history_v1';
 const String autoBackupStorageKey = 'auto_backup_v1';
 const String pinStorageKey = 'app_pin_v1';
 const String trashStorageKey = 'deleted_items_v1';
+const String historyStorageKey = 'change_history_v1';
 
 const String filterAll = 'Tümü';
 const String filterFavorites = 'Favoriler';
@@ -1485,29 +1486,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _updateItem(PackingItem updatedItem) async {
-    await StorageHelper.saveAutoBackup(_items);
+  await StorageHelper.saveAutoBackup(_items);
 
-    setState(() {
-      final index = _items.indexWhere((e) => e.id == updatedItem.id);
+  final oldIndex = _items.indexWhere((e) => e.id == updatedItem.id);
+  final oldItem = oldIndex == -1 ? null : _items[oldIndex];
 
-      if (index == -1) {
-        _items.add(updatedItem);
-      } else {
-        _items[index] = updatedItem;
-      }
+  if (oldItem == null) {
+    await ChangeHistoryHelper.add(
+      itemId: updatedItem.id,
+      itemTitle: updatedItem.title,
+      action: 'Yeni ürün eklendi',
+    );
+  } else {
+    final changes = ChangeHistoryHelper.describeChanges(oldItem, updatedItem);
 
-      _selectedCategory = updatedItem.category;
-    });
-
-    await _saveItems();
-
-    if (!mounted) return;
-    _showSnack('${updatedItem.title} güncellendi');
+    for (final change in changes) {
+      await ChangeHistoryHelper.add(
+        itemId: updatedItem.id,
+        itemTitle: updatedItem.title,
+        action: change,
+      );
+    }
   }
+
+  setState(() {
+    final index = _items.indexWhere((e) => e.id == updatedItem.id);
+
+    if (index == -1) {
+      _items.add(updatedItem);
+    } else {
+      _items[index] = updatedItem;
+    }
+
+    _selectedCategory = updatedItem.category;
+  });
+
+  await _saveItems();
+
+  if (!mounted) return;
+  _showSnack('${updatedItem.title} güncellendi');
+}
 
   Future<void> _deleteItem(PackingItem item) async {
   await StorageHelper.saveAutoBackup(_items);
   await TrashHelper.moveToTrash(item);
+  await ChangeHistoryHelper.add(
+    itemId: item.id,
+    itemTitle: item.title,
+    action: 'Ürün çöp kutusuna taşındı',
+  );
 
   setState(() {
     _items.removeWhere((e) => e.id == item.id);
@@ -1552,36 +1579,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _duplicateItem(PackingItem item) async {
-    await StorageHelper.saveAutoBackup(_items);
+  await StorageHelper.saveAutoBackup(_items);
 
-    final title = '${item.title} Kopya';
-    final details = Map<String, String>.from(item.details);
+  final title = '${item.title} Kopya';
+  final details = Map<String, String>.from(item.details);
 
-    final newItem = PackingItem(
-      id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+  final newItem = PackingItem(
+    id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+    title: title,
+    category: item.category,
+    code: item.code == null ? null : '${item.code}-KOPYA',
+    imagePath: item.imagePath,
+    keywords: _createKeywords(
       title: title,
       category: item.category,
-      code: item.code == null ? null : '${item.code}-KOPYA',
-      imagePath: item.imagePath,
-      keywords: _createKeywords(
-        title: title,
-        category: item.category,
-        code: item.code,
-        details: details,
-      ),
+      code: item.code,
       details: details,
-    );
+    ),
+    details: details,
+  );
 
-    setState(() {
-      _items.add(newItem);
-      _selectedCategory = newItem.category;
-    });
+  await ChangeHistoryHelper.add(
+    itemId: newItem.id,
+    itemTitle: newItem.title,
+    action: '${item.title} ürününden çoğaltıldı',
+  );
 
-    await _saveItems();
+  setState(() {
+    _items.add(newItem);
+    _selectedCategory = newItem.category;
+  });
 
-    if (!mounted) return;
-    _showSnack('$title oluşturuldu');
-  }
+  await _saveItems();
+
+  if (!mounted) return;
+  _showSnack('$title oluşturuldu');
+}
 
   Future<void> _copyItem(PackingItem item) async {
     await Clipboard.setData(ClipboardData(text: item.copyText));
@@ -3175,6 +3208,20 @@ class _DetailScreenState extends State<DetailScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
+                  builder: (_) => ChangeHistoryScreen(
+                    itemId: _item.id,
+                    title: _item.title,
+                  ),
+                ),
+              );
+            },
+            icon: const Icon(Icons.history_rounded),
+            tooltip: 'Geçmiş',
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
                   builder: (_) => ProductQrScreen(item: _item),
                 ),
               );
@@ -4072,6 +4119,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 14),
           _sectionTitle(context, 'Ürün yönetimi'),
+          _settingsTile(
+            context: context,
+            icon: Icons.manage_history_rounded,
+            title: 'Değişiklik geçmişi',
+            subtitle: 'Ürünlerde yapılan işlemleri görüntüle.',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const ChangeHistoryScreen(),
+                ),
+              );
+            },
+          ),
           _settingsTile(
             context: context,
             icon: Icons.delete_sweep_rounded,
@@ -5249,6 +5309,243 @@ class _TrashScreenState extends State<TrashScreen> {
                     );
                   },
                 ),
+    );
+  }
+}
+
+
+class ChangeHistoryEntry {
+  final String itemId;
+  final String itemTitle;
+  final String action;
+  final String createdAt;
+
+  const ChangeHistoryEntry({
+    required this.itemId,
+    required this.itemTitle,
+    required this.action,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'itemId': itemId,
+      'itemTitle': itemTitle,
+      'action': action,
+      'createdAt': createdAt,
+    };
+  }
+
+  factory ChangeHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return ChangeHistoryEntry(
+      itemId: (json['itemId'] ?? '').toString(),
+      itemTitle: (json['itemTitle'] ?? '').toString(),
+      action: (json['action'] ?? '').toString(),
+      createdAt: (json['createdAt'] ?? '').toString(),
+    );
+  }
+}
+
+class ChangeHistoryHelper {
+  static Future<List<ChangeHistoryEntry>> readAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(historyStorageKey);
+
+    if (raw == null || raw.trim().isEmpty) return [];
+
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+
+      return decoded
+          .map(
+            (e) => ChangeHistoryEntry.fromJson(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> saveAll(List<ChangeHistoryEntry> entries) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(
+      historyStorageKey,
+      jsonEncode(entries.map((e) => e.toJson()).toList()),
+    );
+  }
+
+  static Future<void> add({
+    required String itemId,
+    required String itemTitle,
+    required String action,
+  }) async {
+    final entries = await readAll();
+
+    entries.insert(
+      0,
+      ChangeHistoryEntry(
+        itemId: itemId,
+        itemTitle: itemTitle,
+        action: action,
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
+
+    await saveAll(entries.take(300).toList());
+  }
+
+  static List<String> describeChanges(PackingItem oldItem, PackingItem newItem) {
+    final changes = <String>[];
+
+    if (oldItem.title != newItem.title) {
+      changes.add('Başlık değişti: ${oldItem.title} → ${newItem.title}');
+    }
+
+    if (oldItem.category != newItem.category) {
+      changes.add('Kategori değişti: ${oldItem.category} → ${newItem.category}');
+    }
+
+    if ((oldItem.code ?? '') != (newItem.code ?? '')) {
+      changes.add('Kod değişti');
+    }
+
+    if ((oldItem.imagePath ?? '') != (newItem.imagePath ?? '')) {
+      changes.add('Fotoğraf değişti');
+    }
+
+    final keys = <String>{
+      ...oldItem.details.keys,
+      ...newItem.details.keys,
+    };
+
+    for (final key in keys) {
+      final oldValue = oldItem.details[key] ?? '';
+      final newValue = newItem.details[key] ?? '';
+
+      if (oldValue != newValue) {
+        changes.add('$key değişti');
+      }
+    }
+
+    if (changes.isEmpty) {
+      changes.add('Ürün kaydedildi');
+    }
+
+    return changes;
+  }
+}
+
+class ChangeHistoryScreen extends StatelessWidget {
+  final String? itemId;
+  final String? title;
+
+  const ChangeHistoryScreen({
+    super.key,
+    this.itemId,
+    this.title,
+  });
+
+  String _formatDate(String raw) {
+    final date = DateTime.tryParse(raw);
+    if (date == null) return raw;
+
+    final local = date.toLocal();
+    final h = local.hour.toString().padLeft(2, '0');
+    final m = local.minute.toString().padLeft(2, '0');
+
+    return '${local.day}.${local.month}.${local.year} $h:$m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: Text(title == null ? 'Değişiklik Geçmişi' : '$title Geçmişi'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: FutureBuilder<List<ChangeHistoryEntry>>(
+        future: ChangeHistoryHelper.readAll(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.green),
+            );
+          }
+
+          final all = snapshot.data ?? [];
+          final entries = itemId == null
+              ? all
+              : all.where((e) => e.itemId == itemId).toList();
+
+          if (entries.isEmpty) {
+            return const _EmptyState();
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(18),
+            itemCount: entries.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, index) {
+              final entry = entries[index];
+
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppUi.card(context),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppUi.border(context)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.history_rounded,
+                      color: AppColors.green,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            entry.itemTitle,
+                            style: TextStyle(
+                              color: AppUi.text(context),
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            entry.action,
+                            style: TextStyle(
+                              color: AppUi.muted(context),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _formatDate(entry.createdAt),
+                            style: const TextStyle(
+                              color: AppColors.green,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
