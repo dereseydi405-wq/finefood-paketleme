@@ -21,6 +21,7 @@ const String recentStorageKey = 'recent_item_ids_v1';
 const String searchHistoryStorageKey = 'search_history_v1';
 const String autoBackupStorageKey = 'auto_backup_v1';
 const String pinStorageKey = 'app_pin_v1';
+const String multiPhotoStorageKey = 'multi_product_photos_v1';
 const String accessModeStorageKey = 'access_mode_v1';
 const String trashStorageKey = 'deleted_items_v1';
 const String historyStorageKey = 'change_history_v1';
@@ -3877,6 +3878,18 @@ class _DetailScreenState extends State<DetailScreen> {
               ),
               const SizedBox(width: 9),
               _quickButton(
+                icon: Icons.photo_library_rounded,
+                label: 'Fotoğraf',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ProductPhotosScreen(item: _item),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: 9),
+              _quickButton(
                 icon: Icons.qr_code_2_rounded,
                 label: 'QR',
                 onTap: () {
@@ -6917,6 +6930,465 @@ class _HomeActionButton extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class ProductPhotoSlot {
+  final String key;
+  final String title;
+  final IconData icon;
+
+  const ProductPhotoSlot({
+    required this.key,
+    required this.title,
+    required this.icon,
+  });
+}
+
+const List<ProductPhotoSlot> productPhotoSlots = [
+  ProductPhotoSlot(
+    key: 'poset',
+    title: 'Poşet fotoğrafı',
+    icon: Icons.local_mall_rounded,
+  ),
+  ProductPhotoSlot(
+    key: 'koli',
+    title: 'Koli fotoğrafı',
+    icon: Icons.inventory_2_rounded,
+  ),
+  ProductPhotoSlot(
+    key: 'etiket',
+    title: 'Etiket fotoğrafı',
+    icon: Icons.label_rounded,
+  ),
+  ProductPhotoSlot(
+    key: 'palet',
+    title: 'Palet fotoğrafı',
+    icon: Icons.view_in_ar_rounded,
+  ),
+  ProductPhotoSlot(
+    key: 'diger',
+    title: 'Diğer fotoğraf',
+    icon: Icons.photo_library_rounded,
+  ),
+];
+
+class ProductPhotoHelper {
+  static Future<Map<String, String>> _readAllRaw() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(multiPhotoStorageKey);
+
+    if (raw == null || raw.trim().isEmpty) return {};
+
+    try {
+      final decoded = jsonDecode(raw) as Map<String, dynamic>;
+
+      return decoded.map(
+        (key, value) => MapEntry(key, value.toString()),
+      );
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<void> _saveAllRaw(Map<String, String> data) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(multiPhotoStorageKey, jsonEncode(data));
+  }
+
+  static String _storageKey(String itemId, String slotKey) {
+    return '$itemId::$slotKey';
+  }
+
+  static Future<String?> getPhotoPath(String itemId, String slotKey) async {
+    final data = await _readAllRaw();
+    return data[_storageKey(itemId, slotKey)];
+  }
+
+  static Future<Map<String, String>> getPhotosForItem(String itemId) async {
+    final data = await _readAllRaw();
+    final result = <String, String>{};
+
+    for (final slot in productPhotoSlots) {
+      final path = data[_storageKey(itemId, slot.key)];
+
+      if (path != null && path.trim().isNotEmpty) {
+        result[slot.key] = path;
+      }
+    }
+
+    return result;
+  }
+
+  static Future<void> setPhotoPath({
+    required String itemId,
+    required String slotKey,
+    required String path,
+  }) async {
+    final data = await _readAllRaw();
+    data[_storageKey(itemId, slotKey)] = path;
+    await _saveAllRaw(data);
+  }
+
+  static Future<void> removePhoto({
+    required String itemId,
+    required String slotKey,
+  }) async {
+    final data = await _readAllRaw();
+    data.remove(_storageKey(itemId, slotKey));
+    await _saveAllRaw(data);
+  }
+}
+
+class ProductPhotosScreen extends StatefulWidget {
+  final PackingItem item;
+
+  const ProductPhotosScreen({
+    super.key,
+    required this.item,
+  });
+
+  @override
+  State<ProductPhotosScreen> createState() => _ProductPhotosScreenState();
+}
+
+class _ProductPhotosScreenState extends State<ProductPhotosScreen> {
+  bool _loading = true;
+  bool _isAdmin = true;
+  Map<String, String> _photos = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPhotos();
+  }
+
+  Future<void> _loadPhotos() async {
+    final photos = await ProductPhotoHelper.getPhotosForItem(widget.item.id);
+    final isAdmin = await AccessModeHelper.isAdmin();
+
+    if (!mounted) return;
+
+    setState(() {
+      _photos = photos;
+      _isAdmin = isAdmin;
+      _loading = false;
+    });
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: AppColors.navy,
+      ),
+    );
+  }
+
+  Future<String> _copyImageToAppFolder(XFile file, String slotKey) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final photosDir = Directory('${dir.path}/finefood_product_photos');
+
+    if (!photosDir.existsSync()) {
+      photosDir.createSync(recursive: true);
+    }
+
+    final extension = file.path.split('.').last;
+    final safeExtension = extension.length > 6 ? 'jpg' : extension;
+    final targetPath =
+        '${photosDir.path}/${widget.item.id}_${slotKey}_${DateTime.now().millisecondsSinceEpoch}.$safeExtension';
+
+    final copied = await File(file.path).copy(targetPath);
+
+    return copied.path;
+  }
+
+  Future<void> _pickPhoto(ProductPhotoSlot slot) async {
+    if (!_isAdmin) {
+      _showSnack('Çalışan modunda fotoğraf ekleme kapalı.');
+      return;
+    }
+
+    final picker = ImagePicker();
+
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 82,
+    );
+
+    if (picked == null) return;
+
+    final savedPath = await _copyImageToAppFolder(picked, slot.key);
+
+    await ProductPhotoHelper.setPhotoPath(
+      itemId: widget.item.id,
+      slotKey: slot.key,
+      path: savedPath,
+    );
+
+    await ChangeHistoryHelper.add(
+      itemId: widget.item.id,
+      itemTitle: widget.item.title,
+      action: '${slot.title} eklendi',
+    );
+
+    await _loadPhotos();
+    _showSnack('${slot.title} kaydedildi.');
+  }
+
+  Future<void> _removePhoto(ProductPhotoSlot slot) async {
+    if (!_isAdmin) {
+      _showSnack('Çalışan modunda fotoğraf silme kapalı.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Fotoğraf silinsin mi?'),
+        content: Text('${slot.title} silinecek.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Vazgeç'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final path = _photos[slot.key];
+
+    if (path != null) {
+      final file = File(path);
+
+      if (file.existsSync()) {
+        try {
+          file.deleteSync();
+        } catch (_) {}
+      }
+    }
+
+    await ProductPhotoHelper.removePhoto(
+      itemId: widget.item.id,
+      slotKey: slot.key,
+    );
+
+    await ChangeHistoryHelper.add(
+      itemId: widget.item.id,
+      itemTitle: widget.item.title,
+      action: '${slot.title} silindi',
+    );
+
+    await _loadPhotos();
+  }
+
+  void _openPhoto(String path, String title) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PhotoPreviewScreen(
+          title: title,
+          path: path,
+        ),
+      ),
+    );
+  }
+
+  Widget _photoCard(ProductPhotoSlot slot) {
+    final path = _photos[slot.key];
+    final hasPhoto = path != null && File(path).existsSync();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppUi.card(context),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppUi.border(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasPhoto)
+            InkWell(
+              onTap: () => _openPhoto(path, slot.title),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(22),
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(22),
+                ),
+                child: Image.file(
+                  File(path),
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            )
+          else
+            Container(
+              height: 140,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: AppColors.green.withOpacity(0.10),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(22),
+                ),
+              ),
+              child: Icon(
+                slot.icon,
+                color: AppColors.green,
+                size: 54,
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Icon(
+                  slot.icon,
+                  color: AppColors.green,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    slot.title,
+                    style: TextStyle(
+                      color: AppUi.text(context),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (_isAdmin)
+                  TextButton.icon(
+                    onPressed: () => _pickPhoto(slot),
+                    icon: Icon(
+                      hasPhoto ? Icons.swap_horiz_rounded : Icons.add_a_photo_rounded,
+                    ),
+                    label: Text(hasPhoto ? 'Değiştir' : 'Ekle'),
+                  ),
+                if (_isAdmin && hasPhoto)
+                  IconButton(
+                    onPressed: () => _removePhoto(slot),
+                    icon: const Icon(Icons.delete_rounded),
+                    color: Colors.red,
+                    tooltip: 'Sil',
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = _photos.values.where((path) => File(path).existsSync()).length;
+
+    return Scaffold(
+      backgroundColor: AppUi.pageBg(context),
+      appBar: AppBar(
+        title: const Text('Ürün Fotoğrafları'),
+        backgroundColor: AppColors.navy,
+        foregroundColor: Colors.white,
+      ),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.green),
+            )
+          : ListView(
+              padding: const EdgeInsets.all(18),
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: AppColors.navy,
+                    borderRadius: BorderRadius.circular(26),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.photo_library_rounded,
+                        color: AppColors.green,
+                        size: 42,
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.item.title,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 23,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              '$total fotoğraf kayıtlı',
+                              style: const TextStyle(
+                                color: AppColors.green,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...productPhotoSlots.map(_photoCard),
+              ],
+            ),
+    );
+  }
+}
+
+class PhotoPreviewScreen extends StatelessWidget {
+  final String title;
+  final String path;
+
+  const PhotoPreviewScreen({
+    super.key,
+    required this.title,
+    required this.path,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: Text(title),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          child: Image.file(
+            File(path),
+            fit: BoxFit.contain,
           ),
         ),
       ),
