@@ -2680,6 +2680,33 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
             ),
             const SizedBox(height: 18),
+            ProductTemplateChips(
+              onApplyTemplate: (template) {
+                setState(() {
+                  if (_titleController.text.trim().isEmpty) {
+                    _titleController.text = template.titleHint;
+                  }
+
+                  _categoryController.text = template.category;
+
+                  _posetController.text =
+                      template.details['Poşet yazıcı'] ?? '';
+                  _koliYaziciController.text =
+                      template.details['Koli yazıcı'] ?? '';
+                  _koliController.text = template.details['Koli'] ?? '';
+                  _paletController.text = template.details['Palet'] ?? '';
+                  _sktController.text = template.details['SKT'] ?? '';
+                  _filimController.text = template.details['Filim'] ?? '';
+                  _robotController.text =
+                      template.details['Robot sırası'] ?? '';
+                  _tamPaletKgController.text =
+                      template.details['Tam palet kg'] ?? '';
+                  _koliIciPosetController.text =
+                      template.details['Koli içi poşet sayısı'] ?? '';
+                });
+              },
+            ),
+            const SizedBox(height: 18),
             _input(
               controller: _titleController,
               label: 'Başlık',
@@ -4895,6 +4922,126 @@ class MissingInfoReportScreen extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+}
+
+
+class ProductTemplate {
+  final String name;
+  final String titleHint;
+  final String category;
+  final Map<String, String> details;
+
+  const ProductTemplate({
+    required this.name,
+    required this.titleHint,
+    required this.category,
+    required this.details,
+  });
+}
+
+const List<ProductTemplate> finefoodTemplates = [
+  ProductTemplate(
+    name: 'Standart',
+    titleHint: 'Yeni Standart Ürün',
+    category: 'Eklenen Ürünler',
+    details: {
+      'Poşet yazıcı': '',
+      'Koli yazıcı': '',
+      'Koli': '',
+      'Palet': '80×120',
+      'SKT': '',
+      'Filim': '',
+      'Robot sırası': '',
+      'Tam palet kg': '',
+      'Koli içi poşet sayısı': '',
+    },
+  ),
+  ProductTemplate(
+    name: 'Mcdonalds',
+    titleHint: 'Mcdonalds Yeni Ürün',
+    category: 'Mcdonalds',
+    details: {
+      'Poşet yazıcı': 'Mcdonalds ... poset',
+      'Koli yazıcı': 'Mcdonalds ... koli',
+      'Koli': '',
+      'Palet': '80×120',
+      'SKT': '1 Yıl',
+      'Filim': '',
+      'Robot sırası': '6',
+      'Tam palet kg': '',
+      'Koli içi poşet sayısı': '5',
+    },
+  ),
+  ProductTemplate(
+    name: 'Lezita',
+    titleHint: 'Lezita Yeni Ürün',
+    category: 'Lezita',
+    details: {
+      'Poşet yazıcı': 'Lezita ... poset',
+      'Koli yazıcı': 'Lezita ... koli',
+      'Koli': '',
+      'Palet': '80×120',
+      'SKT': '2 Yıl',
+      'Filim': 'Lezita filim',
+      'Robot sırası': '6 sıra',
+      'Tam palet kg': '',
+      'Koli içi poşet sayısı': '5 Adet',
+    },
+  ),
+];
+
+class ProductTemplateChips extends StatelessWidget {
+  final void Function(ProductTemplate template) onApplyTemplate;
+
+  const ProductTemplateChips({
+    super.key,
+    required this.onApplyTemplate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppUi.card(context),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppUi.border(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ürün şablonu',
+            style: TextStyle(
+              color: AppUi.text(context),
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Hazır şablon seç, alanlar otomatik dolsun.',
+            style: TextStyle(
+              color: AppUi.muted(context),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: finefoodTemplates.map((template) {
+              return ActionChip(
+                avatar: const Icon(Icons.auto_awesome_rounded),
+                label: Text(template.name),
+                onPressed: () => onApplyTemplate(template),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 }
