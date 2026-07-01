@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
@@ -14,8 +13,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:barcode/barcode.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:mobile_scanner/mobile_scanner.dart' hide Barcode;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 const String itemsStorageKey = 'packing_items_all_v3';
 const String oldItemsStorageKey = 'packing_items_all_v2';
@@ -38,8 +37,13 @@ const String filterReady = 'Hazır Ürünler';
 const String filterMissing = 'Eksik Bilgili';
 String? _finefoodPendingScannedCode;
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(
+    url: 'https://hvultqufyberqpbfpefq.supabase.co',
+    anonKey: 'sb_publishable_31Z_DFTn0pOB5RUhU2wCeQ_G4tsM3X1',
+  );
+
   await AppSettings.loadAll();
   runApp(const FinefoodApp());
 }
@@ -4279,6 +4283,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+
+  Future<void> _uploadCloudBackup(BuildContext context) async {
+    try {
+      final items = await StorageHelper.readItems();
+      final count = await SupabaseSyncHelper.uploadLocalItems(items);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$count ürün buluta yedeklendi.')),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Buluta yedekleme başarısız: $e')),
+      );
+    }
+  }
+
+  Future<void> _downloadCloudBackup(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Buluttan geri yükle'),
+          content: const Text(
+            'Supabase üzerindeki ürünler telefona indirilecek. Mevcut ürünlerin otomatik yedeği alınacak.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Vazgeç'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Geri yükle'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final cloudItems = await SupabaseSyncHelper.downloadItems();
+
+      if (!context.mounted) return;
+
+      if (cloudItems.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bulutta ürün bulunamadı.')),
+        );
+        return;
+      }
+
+      final localItems = await StorageHelper.readItems();
+      await StorageHelper.saveAutoBackup(localItems);
+      await StorageHelper.saveItems(cloudItems);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${cloudItems.length} ürün buluttan indirildi. Ana sayfayı yenile.'),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Buluttan indirme başarısız: $e')),
+      );
+    }
+  }
+
   Future<void> _copyBackup(BuildContext context) async {
     final items = await StorageHelper.readItems();
     final backupCode = StorageHelper.createBackupCode(items);
@@ -5076,6 +5153,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               }
             },
+          ),
+          _settingsTile(
+            context: context,
+            icon: Icons.cloud_upload_rounded,
+            title: 'Buluta yedekle',
+            subtitle: 'Telefondaki ürünleri Supabase veritabanına kaydeder.',
+            onTap: () => _uploadCloudBackup(context),
+          ),
+          _settingsTile(
+            context: context,
+            icon: Icons.cloud_download_rounded,
+            title: 'Buluttan geri yükle',
+            subtitle: 'Supabase kayıtlarını telefona indirir.',
+            onTap: () => _downloadCloudBackup(context),
           ),
           _settingsTile(
             context: context,
@@ -7783,3 +7874,124 @@ extension _FinefoodFirstOrNullExtension<T> on Iterable<T> {
     return null;
   }
 }
+
+class SupabaseSyncHelper {
+  static const String _table = 'finefood_products';
+
+  static SupabaseClient get _client => Supabase.instance.client;
+
+  static String _pickText(Map<String, dynamic> data, List<String> keys) {
+    for (final key in keys) {
+      final value = data[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return '';
+  }
+
+  static bool _pickBool(dynamic value) {
+    if (value is bool) return value;
+    return value.toString().toLowerCase() == 'true';
+  }
+
+  static Map<String, dynamic> _rowFromItem(PackingItem item) {
+    final data = Map<String, dynamic>.from(item.toJson());
+
+    var id = _pickText(data, ['id']);
+    if (id.isEmpty) {
+      id = DateTime.now().microsecondsSinceEpoch.toString();
+      data['id'] = id;
+    }
+
+    final title = _pickText(data, [
+      'title',
+      'name',
+      'productName',
+      'product_name',
+      'label',
+    ]);
+
+    final code = _pickText(data, [
+      'code',
+      'barcode',
+      'qrCode',
+      'qr_code',
+      'productCode',
+      'product_code',
+    ]);
+
+    final category = _pickText(data, ['category', 'categoryName', 'group']);
+    final imagePath = _pickText(data, ['imagePath', 'image_path', 'photoPath']);
+
+    return {
+      'id': id,
+      'title': title.isEmpty ? 'Ürün' : title,
+      'code': code.isEmpty ? null : code,
+      'category': category.isEmpty ? 'Genel' : category,
+      'details': data,
+      'image_path': imagePath.isEmpty ? null : imagePath,
+      'is_builtin': _pickBool(data['isBuiltin'] ?? data['is_builtin']),
+      'is_deleted': _pickBool(data['isDeleted'] ?? data['is_deleted']),
+    };
+  }
+
+  static Future<int> uploadLocalItems(List<PackingItem> items) async {
+    final rows = items.map(_rowFromItem).toList();
+    if (rows.isEmpty) return 0;
+
+    const chunkSize = 80;
+    for (var i = 0; i < rows.length; i += chunkSize) {
+      final end = (i + chunkSize > rows.length) ? rows.length : i + chunkSize;
+      await _client.from(_table).upsert(
+            rows.sublist(i, end),
+            onConflict: 'id',
+          );
+    }
+
+    return rows.length;
+  }
+
+  static Future<List<PackingItem>> downloadItems() async {
+    final rows = await _client
+        .from(_table)
+        .select()
+        .eq('is_deleted', false)
+        .order('updated_at', ascending: false);
+
+    final items = <PackingItem>[];
+
+    for (final row in rows) {
+      if (row is! Map) continue;
+
+      Map<String, dynamic> data = {};
+
+      final details = row['details'];
+      if (details is Map) {
+        data = Map<String, dynamic>.from(details);
+      } else if (details is String && details.trim().isNotEmpty) {
+        final decoded = jsonDecode(details);
+        if (decoded is Map) {
+          data = Map<String, dynamic>.from(decoded);
+        }
+      }
+
+      data['id'] ??= row['id'];
+      data['title'] ??= row['title'];
+      data['code'] ??= row['code'];
+      data['category'] ??= row['category'];
+      data['imagePath'] ??= row['image_path'];
+      data['isBuiltin'] ??= row['is_builtin'];
+      data['isDeleted'] ??= row['is_deleted'];
+
+      try {
+        items.add(PackingItem.fromJson(data));
+      } catch (_) {
+        // Bozuk kayıt varsa uygulamayı düşürme.
+      }
+    }
+
+    return items;
+  }
+}
+
